@@ -9,6 +9,7 @@
     "noEmit": true,
     "isolatedModules": true,
     "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "inlineSourceMap": true,
     "moduleResolution": "Node",
