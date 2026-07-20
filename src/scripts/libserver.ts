@@ -1,5 +1,4 @@
 import {NS, ProcessInfo, Server} from "@ns";
-import { Globals } from "./globals";
 
 /**
  * Combination function to check for root access without manually
