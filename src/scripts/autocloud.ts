@@ -1,5 +1,6 @@
 import {NS} from "@ns";
 import { putBundle } from "./libserver.ts";
+import { Globals } from "./globals.ts";
 
 enum CloudNames {
     "alfa",
@@ -47,12 +48,11 @@ export async function main(ns: NS) {
     }
     while (true) {
         servers = ns.cloud.getServerNames();
-        var tiers = getCloudTiers(ns);
+        var tiers = getCloudTiers();
         if (servers.length < ns.cloud.getServerLimit()) {
-            if (ns.cloud.getServerCost(16) < ns.getPlayer().money * 0.10) {
+            if (ns.cloud.getServerCost(2) < ns.getPlayer().money * 0.05) {
                 var name = CloudNames[servers.length + 1];
-                ns.cloud.purchaseServer(name, 16);
-                // ns.tprint(`Purchased cloud server ${name}`);
+                ns.cloud.purchaseServer(name, 2);
             }
         }
         for (var server of servers) {
@@ -62,18 +62,14 @@ export async function main(ns: NS) {
                 var ram = tiers[nextTier];
                 if (cost <= ns.getPlayer().money / servers.length) {
                     ns.cloud.upgradeServer(server, tiers[nextTier]);
-                   // ns.tprint(`Upgraded ${server} to ${ram} for ${cost}`);
-                    ns.killall(server);
-                    var threads = Math.floor(tiers[nextTier] / ns.getScriptRam("scripts/sharing.js"));
-                    ns.exec("scripts/sharing.js", server, threads)
                 }   
             }
         }
-        await ns.sleep(1000);
+        await ns.sleep(10000);
     }
 }
 
-export function getCloudTiers(ns: NS): Array<number> {
+export function getCloudTiers(): Array<number> {
     var gb = 2;
     var list = new Array<number>;
     while (gb < 2 ** 20) {
