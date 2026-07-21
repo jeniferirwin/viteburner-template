@@ -26,6 +26,20 @@ export function getServerFreeRam(ns: NS, hostname: string): number {
 }
 
 /**
+ * Check to see if a server is prepped for batch hacking.
+ * @param ns NetScript reference.
+ * @param hostname Hostname/IP of the server being checked.
+ * @returns true if the server is rooted, at max money, and at minimum security, false otherwise.
+ */
+export function isPrepped(ns: NS, hostname: string): boolean {
+  if (!isRoot(ns, hostname) || (ns.getServerMaxMoney(hostname) ?? 0 == 0)) return false;
+  var isMoneyMax = ns.getServerMoneyAvailable(hostname) ?? 0 === ns.getServerMaxMoney(hostname);
+  var isSecurityMin = ns.getServerSecurityLevel(hostname) ?? -1 === ns.getServerMinSecurityLevel(hostname);
+  if (isMoneyMax && isSecurityMin) return true;
+  return false;
+}
+
+/**
  * Build a map of every server's hostname to the list of its unvisited
  * neighboring hostnames, based on ns.scan results.
  * @param ns NetScript reference.
@@ -93,6 +107,7 @@ export function getAllServerNames(ns: NS) {
 
 /**
  * Get the full Server object for every discovered server.
+ * Will automatically try to crack servers.
  * @param ns NetScript reference.
  * @returns A map of hostname to its corresponding Server object.
  */
@@ -100,7 +115,7 @@ export function getAllServers(ns: NS): Map<string, Server> {
   var servers = new Map<string, Server>();
   var names = getAllServerNames(ns);
   for (var name of names) {
-    servers.set(name, ns.getServer(name));
+    servers.set(name, getNukedServer(ns, name) ?? ns.getServer(name));
   }
   return servers;
 }
@@ -114,7 +129,7 @@ export function getCrackedMoneyServers(ns: NS): Map<string, Server> {
   var crackedServers = new Map<string, Server>();
   var allServers = getAllServers(ns);
   for (var server of allServers.values()) {
-    if (isRoot(ns, server.hostname) && (server.moneyMax ?? 0 > 0)) {
+    if (server.hasAdminRights && (server.moneyMax ?? 0) > 0) {
       crackedServers.set(server.hostname, server);
     }
   }
@@ -152,21 +167,6 @@ export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
 }
 
 /**
- * Check whether the number of ports required to crack the given server is known.
- * @param ns NetScript reference.
- * @param server The server being checked.
- * @returns true if the required port count is defined, false otherwise.
- */
-export function canCrackPorts(ns: NS, server: Server): boolean {
-  var reqPorts = ns.getServerNumPortsRequired(server.hostname);
-  if (reqPorts === undefined) {
-    ns.tprint(`Ports on ${server.hostname} are undefined, cannot crack`);
-    return false;
-  }
-  return true;
-}
-
-/**
  * Attempt to open every available port-cracking program against the given server.
  * @param ns NetScript reference.
  * @param server The server to crack ports on.
@@ -174,26 +174,23 @@ export function canCrackPorts(ns: NS, server: Server): boolean {
  * was newly cracked. False otherwise.
  */
 export function crackPorts(ns: NS, server: Server): boolean {
-  if (server.openPortCount == 5) {
+  if ((server.openPortCount ?? 0) == (server.numOpenPortsRequired ?? -1)) {
     return true;
   }
-  if (!canCrackPorts(ns, server)) {
-    return false;
-  }
   var anyCracked = false;
-  if (!server.ftpPortOpen && ns.ftpcrack(server.hostname)) {
+  if (!(server.ftpPortOpen ?? false) && ns.ftpcrack(server.hostname)) {
     anyCracked = true;
   }
-  if (!server.sqlPortOpen && ns.sqlinject(server.hostname)) {
+  if (!(server.sqlPortOpen ?? false) && ns.sqlinject(server.hostname)) {
     anyCracked = true;
   }
-  if (!server.sshPortOpen && ns.brutessh(server.hostname)) {
+  if (!(server.sshPortOpen ?? false) && ns.brutessh(server.hostname)) {
     anyCracked = true;
   }
-  if (!server.httpPortOpen && ns.httpworm(server.hostname)) {
+  if (!(server.httpPortOpen ?? false) && ns.httpworm(server.hostname)) {
     anyCracked = true;
   }
-  if (!server.smtpPortOpen && ns.relaysmtp(server.hostname)) {
+  if (!(server.smtpPortOpen ?? false) && ns.relaysmtp(server.hostname)) {
     anyCracked = true;
   }
   return anyCracked;
@@ -211,6 +208,24 @@ export function canNuke(server: Server): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * Attempt to gain root access to a server by cracking its ports and running NUKE.exe.
+ * @param ns NetScript reference.
+ * @param hostname Hostname/IP of the server to nuke.
+ * @returns The updated Server object if root access exists or was gained, undefined if the server doesn't exist or couldn't be nuked.
+ */
+export function getNukedServer(ns: NS, hostname: string): Server | undefined {
+  if (!ns.serverExists(hostname)) return undefined;
+  var server = ns.getServer(hostname);
+  if (server.hasAdminRights) return server;
+  if (crackPorts(ns, server) && canNuke(server)) {
+    ns.nuke(server.hostname);
+    server = ns.getServer(server.hostname);
+    return server;
+  }
+  return undefined;
 }
 
 /**
