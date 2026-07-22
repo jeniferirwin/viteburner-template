@@ -152,6 +152,17 @@ export function getSecuredMoneyServers(ns: NS): Map<string, Server> {
   return securedServers;
 }
 
+export function getScriptableServers(ns: NS): Map<string, Server> {
+  var scriptableServers = new Map<string, Server>();
+  var allServers = getAllServers(ns);
+  for (var server of allServers.values()) {
+    if (!isRoot(ns, server.hostname)) {
+      scriptableServers.set(server.hostname, server);
+    }
+  }
+  return scriptableServers;
+}
+
 /**
  * Get the list of running processes on every discovered server.
  * @param ns NetScript reference.
@@ -284,4 +295,14 @@ export function getAllGlobalRAM(ns: NS): Map<string, number> {
         data.set(server, ram);
     }
     return data;
+}
+
+export function findOpenRam(ns: NS, ram: number): string | undefined {
+  var servers = getScriptableServers(ns);
+  for (var server of servers.values()) {
+    if (server.maxRam - server.ramUsed >= ram) {
+      return server.hostname;
+    }
+  }
+  return undefined;
 }
