@@ -1,81 +1,54 @@
 import {NS} from "@ns";
 
+export enum PORT {
+    DUMMY,
+    PREP,
+    BATCH
+}
+
 export class Ports {
-    static prep = 1;
-    static batch = 2;
-    static prepBlocked = false;
-    static batchBlocked = false;
+    static blocked: Set<PORT> = new Set<PORT>();
 
-    static async waitPrepPort(): Promise<boolean> {
+    static async waitPort(port: PORT): Promise<Boolean> {
         const promise = new Promise<boolean>(async (resolve) => {
-            while (Ports.prepBlocked === true) continue;
+            while (Ports.blocked.has(port)) continue;
             resolve(true);
         });
         return promise;
     }
 
-    static async waitBatchPort(): Promise<boolean> {
-        const promise = new Promise<boolean>(async (resolve) => {
-            while (Ports.batchBlocked === true) continue;
-            resolve(true);
-        });
-        return promise;
-    }
-
-    static async addPreppedTarget(ns: NS, hostname: string): Promise<boolean> {
-        await Ports.waitPrepPort();
+    static async addTarget(ns: NS, hostname: string, port: PORT): Promise<boolean> {
+        await Ports.waitPort(port);
         const promise = new Promise<boolean>(async (resolve, reject) => {
             if (!ns.serverExists(hostname)) {
-                ns.tprintRaw(`[PREP] No such server '${hostname}'`);
-                reject(false);
+                reject(`No such server ${hostname}`);
             }
-            var port = ns.getPortHandle(Ports.prep);
-            var entries: Array<string>;
-            ns.tprintRaw(`[PREP] Before: ${port.peek()}`);
-            Ports.prepBlocked = true;
-            if (port.empty()) {
-                entries = [hostname];
+            var handle = ns.getPortHandle(port);
+            var entries: Set<string>;
+            Ports.blocked.add(port);
+            if (handle.empty()) {
+                entries = new Set<string>([hostname]);
             } else {
-                entries = port.read();
-                if (entries.indexOf(hostname) < 0) {
-                    entries.push(hostname);
-                }
+                entries = handle.read();
+                entries.add(hostname);
             }
-            port.tryWrite(entries);
-            Ports.prepBlocked = false;
-            ns.tprintRaw(`[PREP] After: ${port.peek()}`);
+            handle.clear();
+            handle.tryWrite(entries);
+            Ports.blocked.delete(port);
             resolve(true);
         });
         return promise;
     }
 
-    static async addBatchedTarget(ns: NS, hostname: string): Promise<boolean> {
-        await Ports.waitBatchPort();
-        const promise = new Promise<boolean>(async (resolve, reject) => {
-            if (!ns.serverExists(hostname)) {
-                ns.tprintRaw(`[BATCH] No such server '${hostname}'`);
-                reject(false);
-            }
-            var port = ns.getPortHandle(Ports.batch);
-            var entries: Array<string>;
-            ns.tprintRaw(`[BATCH] Before: ${port.peek()}`);
-            Ports.batchBlocked = true;
-            if (port.empty()) {
-                entries = [hostname];
-            } else {
-                entries = port.read();
-                if (entries.indexOf(hostname) < 0) {
-                    entries.push(hostname);
-                }
-            }
-            port.tryWrite(entries);
-            Ports.batchBlocked = false;
-            ns.tprintRaw(`[BATCH] After: ${port.peek()}`);
-            resolve(true);
+    static async peekTargets(ns: NS, port: PORT): Promise<Set<string>> {
+        await Ports.waitPort(port);
+        const promise = new Promise<Set<string>>(async (resolve) => {
+            resolve(ns.peek(port).values());
         });
         return promise;
     }
 }
 
 export async function main(ns: NS) {
+    
 }
