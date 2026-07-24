@@ -306,3 +306,17 @@ export function findOpenRam(ns: NS, ram: number): string | undefined {
   }
   return undefined;
 }
+
+export function assignAgentTask(ns: NS, script: string, threads: number, hostname: string): boolean {
+  var servers = getScriptableServers(ns);
+  if (servers === undefined) return false;
+  const ramDescending = Array.from(servers.values()).sort((a, b) => (a.maxRam - a.ramUsed) - (b.maxRam - b.ramUsed));
+  for (var entry of ramDescending) {
+    ns.tprintRaw(`${entry.hostname}: ${entry.maxRam - entry.ramUsed}`);
+  }
+  return true;
+}
+
+export function main(ns: NS) {
+  assignAgentTask(ns, "kjsf", 5, "joesguns");
+}
