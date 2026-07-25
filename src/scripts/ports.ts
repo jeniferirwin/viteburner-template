@@ -47,8 +47,13 @@ export class Ports {
         });
         return promise;
     }
-}
 
-export async function main(ns: NS) {
-    
+    static async targetExists(ns: NS, target: string, port: PORT): Promise<boolean> {
+        await Ports.waitPort(port);
+        var targets = await Ports.peekTargets(ns, port);
+        const promise = new Promise<boolean>(async (resolve) => {
+            resolve(targets.has(target));
+        });
+        return promise;
+    }
 }
