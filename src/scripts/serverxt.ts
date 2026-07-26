@@ -1,5 +1,4 @@
 import {NS, Server} from "@ns";
-import { AttackAssignment } from "./tasks";
 
 export interface ServerXT extends Server {
     hasCash(): boolean;
@@ -47,6 +46,27 @@ export class ServerXT implements Server, ServerXT {
 		var results = ns.scan(this.hostname);
 		return results.slice(1);
 	}
+
+    getMoneyMult(ns: NS): number {
+        if (this.purchasedByPlayer ||
+            (this.moneyMax ?? 0) === 0 ||
+            (this.moneyAvailable ?? 0) === 0 ||
+            (this.baseDifficulty ?? -1) === -1 ||
+            (this.hackDifficulty ?? -1) === -1 ||
+            (this.minDifficulty ?? -1)) return 0;
+        return ns.getServerMaxMoney(this.hostname) / ns.getServerMoneyAvailable(this.hostname);
+    }
+
+    getSecurityDiff(ns: NS): number {
+        if (this.purchasedByPlayer) return -1;
+        if (this.hackDifficulty === undefined || this.minDifficulty === undefined) return -1;
+        return this.hackDifficulty - this.minDifficulty;
+    }
+
+    isAgent(): boolean {
+        if (this.hasAdminRights && (this.maxRam ?? 0) > 0) return true;
+        return false;
+    }
 }
 
 /**
