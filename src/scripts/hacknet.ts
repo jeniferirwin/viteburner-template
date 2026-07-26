@@ -1,7 +1,7 @@
 import {NS} from "@ns";
 
 export async function main(ns: NS) {
-    const pct = 0.05;
+    const pct = 0.02;
     while (true) {
         if (ns.hacknet.getPurchaseNodeCost() < pct * ns.getPlayer().money) {
             ns.hacknet.purchaseNode();

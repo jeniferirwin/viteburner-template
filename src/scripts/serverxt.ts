@@ -39,9 +39,14 @@ export class ServerXT implements Server, ServerXT {
     }
 
     getParent(ns: NS): string | undefined {
-
-        return undefined;
+		var results = ns.scan(this.hostname);
+		return results[0];
     }
+	
+	getChildren(ns: NS): Array<string> | undefined {
+		var results = ns.scan(this.hostname);
+		return results.slice(1);
+	}
 }
 
 /**
@@ -55,4 +60,14 @@ export function getServerXT(ns: NS, hostname: string): ServerXT | undefined {
     var xt = Object.assign(new ServerXT(), raw);
     if (xt.crack(ns)) xt.putBundle(ns);
     return xt;
+}
+
+
+export function main(ns: NS) {
+	var server = getServerXT(ns, "home");
+	var children = server?.getChildren(ns) || new Array<string>();
+	ns.tprint(children);
+	for (var child of children) {
+		ns.tprint(`Child: ${child}`);
+	}
 }
