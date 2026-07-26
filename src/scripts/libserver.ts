@@ -1,6 +1,4 @@
 import {ScriptArg, NS, ProcessInfo, Server} from "@ns";
-import {AttackAssignment} from "./tasks";
-import { Globals } from "./globals";
 import { ServerXT, getServerXT } from "./serverxt";
 
 /**
