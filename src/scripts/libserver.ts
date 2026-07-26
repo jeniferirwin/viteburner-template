@@ -31,6 +31,17 @@ export function getAllServerNames(ns: NS) {
   return servers;
 }
 
+export function listAllFiles(ns: NS) {
+  var servers = getAllServers(ns);
+  for (var [serverName, server] of servers) {
+    if (serverName === "home") continue;
+    for (var file of ns.ls(serverName)) {
+      if (file.startsWith("scripts")) continue;
+      ns.tprintRaw(`${serverName} - ${file}`);
+    }
+  }
+}
+
 /**
  * Get the full Server object for every discovered server.
  * @param ns NetScript reference.
@@ -61,5 +72,5 @@ export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
 }
 
 export function main(ns: NS) {
-  getAllServers(ns);
+  listAllFiles(ns);
 }
