@@ -1,5 +1,4 @@
 import {NS} from "@ns";
-import { putBundle } from "./libserver.ts";
 import { Globals } from "./globals.ts";
 
 enum CloudNames {
@@ -33,21 +32,7 @@ enum CloudNames {
 
 export async function main(ns: NS) {
     var servers = ns.cloud.getServerNames();
-    if (ns.args.length > 0) {
-        if (ns.args[0].valueOf() === "scripts") {
-            var i = 0;
-            for (var server of servers) {
-                putBundle(ns, server);
-                ns.killall(server);
-                var ram = ns.getServerMaxRam(server);
-                var threads = Math.floor(ram / ns.getScriptRam("scripts/sharing.js"));
-                ns.exec("scripts/sharing.js", server, threads)
-                i++;
-            }
-        }
-    }
     while (true) {
-        servers = ns.cloud.getServerNames();
         var tiers = getCloudTiers();
         if (servers.length < ns.cloud.getServerLimit()) {
             if (ns.cloud.getServerCost(2) < ns.getPlayer().money * 0.05) {

@@ -72,18 +72,6 @@ export class AttackAssignment extends TaskAssignment {
         return true;
     }
 
-    public findAgent(ns: NS): boolean {
-        return false;
-        // TODO: get a list of all scriptable servers,
-        // then iterate through them looking for one with
-        // enough RAM for the task. consider using analyze
-        // functions to also incorporate cores if that
-        // doesn't become too complex. always picking the
-        // highest-core machine we see might be good, but
-        // it would be most efficient to find a way to
-        // match high-effort tasks to high-power machines
-    }
-
     private static validateThreads(threads: number): boolean {
         if (threads > 0) return true;
         return false;

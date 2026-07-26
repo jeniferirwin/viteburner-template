@@ -29,12 +29,18 @@ export class ServerXT implements Server, ServerXT {
         ns.httpworm(this.hostname);
         ns.sqlinject(this.hostname);
         ns.relaysmtp(this.hostname);
+        ns.tprintRaw(`Cracking ${this.hostname}`);
         return ns.nuke(this.hostname);
     }
     
     putBundle(ns: NS): boolean {
         const bundle = ns.ls("home", "scripts");
         return ns.scp(bundle, this.hostname, "home");
+    }
+
+    getParent(ns: NS): string | undefined {
+
+        return undefined;
     }
 }
 

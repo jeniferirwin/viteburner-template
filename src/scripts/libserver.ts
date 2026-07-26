@@ -1,6 +1,7 @@
 import {ScriptArg, NS, ProcessInfo, Server} from "@ns";
 import {AttackAssignment} from "./tasks";
 import { Globals } from "./globals";
+import { ServerXT, getServerXT } from "./serverxt";
 
 /**
  * Discover every reachable server name by recursively scanning from "home",
@@ -36,10 +37,11 @@ export function getAllServerNames(ns: NS) {
  * @returns A map of hostname to its corresponding Server object.
  */
 export function getAllServers(ns: NS): Map<string, Server> {
-  var servers = new Map<string, Server>();
+  var servers = new Map<string, ServerXT>();
   var names = getAllServerNames(ns);
   for (var name of names) {
-    servers.set(name, ns.getServer(name));
+    var server = getServerXT(ns, name);
+    if (server !== undefined) servers.set(name, server);
   }
   return servers;
 }
@@ -56,4 +58,8 @@ export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
         pids.set(server, ns.ps(server));
     }
     return pids;
+}
+
+export function main(ns: NS) {
+  getAllServers(ns);
 }
