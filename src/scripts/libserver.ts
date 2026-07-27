@@ -14,17 +14,14 @@ export function getAllServerNames(ns: NS) {
   while (changed === true) {
     changed = false;
     for (var server of servers.values()) {
-        var results = ns.scan(server);
-        for (var result of results) {
-            if (servers.indexOf(result) < 0) {
-              servers.push(result);
-              changed = true;
-            } 
-        }
+      var results = ns.scan(server);
+      for (var result of results) {
+        if (servers.indexOf(result) < 0) {
+          servers.push(result);
+          changed = true;
+        } 
+      }
     }
-  }
-  for (var cloudServer of ns.cloud.getServerNames()) {
-    servers.push(cloudServer);
   }
   return servers;
 }
@@ -45,7 +42,7 @@ export function listAllFiles(ns: NS) {
  * @param ns NetScript reference.
  * @returns A map of hostname to its corresponding Server object.
  */
-export function getAllServers(ns: NS): Map<string, Server> {
+export function getAllServers(ns: NS): Map<string, ServerXT> {
   var servers = new Map<string, ServerXT>();
   var names = getAllServerNames(ns);
   for (var name of names) {
