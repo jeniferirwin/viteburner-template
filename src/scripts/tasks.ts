@@ -72,43 +72,37 @@ export class ZeroSecDiff extends AttackAssignment {
         return new ZeroSecDiff(ns, victim);
     }
 
-    public calculateThreads(ns: NS, attacker: ServerXT, target: ServerXT): number {
-        var diff = target.getSecurityDiff(ns) ?? 0;
+    public calculateThreads(ns: NS, attacker: ServerXT): number {
+        var diff = this.getVictimXT(ns)?.getSecurityDiff(ns) ?? 0;
         this.threads = Math.ceil(diff / 0.05);
-        var amount = ns.weakenAnalyze(this.threads ?? 0, attacker.cpuCores ?? 1);
         while (ns.weakenAnalyze((this.threads ?? 0), attacker.cpuCores ?? 1) > diff) {
             this.threads--;
         }
         this.threads++;
-        var final = ns.weakenAnalyze((this.threads ?? 0), attacker.cpuCores);
-        ns.tprint(`${attacker.hostname} needs ${this.threads} threads to do ${final} reduction vs ${diff} (${attacker.cpuCores} cores)`)
         return this.threads;
     }
 
-    public generateAttackPlan(ns: NS, agentName: string): boolean {
-        if (!this.setAgent(ns, agentName) || this.agent === undefined) return false;
-        var attacker = getServerXT(ns, this.agent);
-        var target = getServerXT(ns, this.victimName);
+    public calculateTotalRAM(ns: NS, attacker: ServerXT): number {
+        return attacker.getWeakenRAM(ns) * (this.threads ?? 1);
+    }
+
+    public locateAgent(ns: NS): boolean {
+        var target = this.getVictimXT(ns);
+        var servers = getAllServers(ns);
+        var threads = Number.POSITIVE_INFINITY;
+        for (var [hostname, server] of servers) {
+            if (!server.isAgent() || server === undefined) continue;
+            var agentThreads = this.calculateThreads(ns, server);
+        }
         return true;
     }
 }
 
 export function main(ns: NS) {
-    var test = ZeroSecDiff.createAttack(ns, ns.args[0] as string);
-    var target = test?.getVictimXT(ns);
-    if (test === undefined || target === undefined) return;
-    var servers = getAllServers(ns);
     let threads;
     let serverName;
-    var scriptRam = ns.getScriptRam("scripts/atk_weaken.js", "home");
-    let ram;
     for (var [hostname, server] of servers) {
-        if (!server.isAgent() || server === undefined) continue;
-        if (threads === undefined) {
-            threads = test.calculateThreads(ns, server, target);
-        }
         var newcalc = test.calculateThreads(ns, server, target);
-        ns.tprintRaw(`${newcalc} < ${threads} && ${scriptRam} * ${threads} (${scriptRam * threads}) < ${server.openRAM() ?? 0}GB`);
         if (newcalc <= threads && scriptRam * threads < (server.openRAM() ?? 0)) {
             threads = newcalc;
             serverName = hostname;

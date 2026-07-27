@@ -1,4 +1,6 @@
 import {NS, Server} from "@ns";
+import { Globals } from "./globals";
+import { TaskAssignment } from "./tasks";
 
 export interface ServerXT extends Server {
     hasCash(): boolean;
@@ -67,6 +69,27 @@ export class ServerXT implements Server, ServerXT {
         if (this.hasAdminRights && (this.maxRam ?? 0) > 0) return true;
         return false;
     }
+
+    getWeakenRAM(ns: NS): number {
+        return ns.getScriptRam(Globals.scriptWeaken, this.hostname);
+    }
+
+    getGrowRAM(ns: NS): number {
+        return ns.getScriptRam(Globals.scriptGrow, this.hostname);
+    }
+
+    getHackRAM(ns: NS): number {
+        return ns.getScriptRam(Globals.scriptHack, this.hostname);
+    }
+
+    hasEnoughRAM(ns: NS, task: TaskAssignment): boolean {
+
+    }
+
+    refresh(ns: NS): ServerXT {
+        var server = getServerXT(ns, this.hostname) ?? this;
+        return server;
+    }
 }
 
 /**
@@ -80,14 +103,4 @@ export function getServerXT(ns: NS, hostname: string): ServerXT | undefined {
     var xt = Object.assign(new ServerXT(), raw);
     if (xt.crack(ns)) xt.putBundle(ns);
     return xt;
-}
-
-
-export function main(ns: NS) {
-	var server = getServerXT(ns, "home");
-	var children = server?.getChildren(ns) || new Array<string>();
-	ns.tprint(children);
-	for (var child of children) {
-		ns.tprint(`Child: ${child}`);
-	}
 }
