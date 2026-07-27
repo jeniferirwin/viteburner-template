@@ -14,8 +14,8 @@ export class ServerXT implements Server, ServerXT {
     }
 
     openRAM(): number {
-        if ((this.maxRam ?? 0) > 0 && (this.ramUsed ?? 0) > 0) {
-            return this.maxRam - this.ramUsed; 
+        if ((this.maxRam ?? 0) > 0 && (this.ramUsed ?? -1) > -1) {
+            return (this.maxRam - this.ramUsed); 
         }
         return 0;
     }
