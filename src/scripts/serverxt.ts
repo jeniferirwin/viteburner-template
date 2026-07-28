@@ -81,10 +81,6 @@ export class ServerXT implements Server, ServerXT {
         return ns.getScriptRam(Globals.scriptHack, this.hostname);
     }
 
-    hasEnoughRAM(ns: NS, task: TaskAssignment): boolean {
-
-    }
-
     refresh(ns: NS): ServerXT {
         var server = getServerXT(ns, this.hostname) ?? this;
         return server;
