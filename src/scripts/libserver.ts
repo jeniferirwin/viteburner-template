@@ -66,6 +66,17 @@ export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
     return pids;
 }
 
+export function listAllRAM(ns: NS): Map<string, number> {
+  var servers = getAllServers(ns);
+  var ram = new Map<string, number>();
+  for (var server of servers.values()) {
+    if (!server.isAgent()) continue;
+    ram.set(server.hostname, server.maxRam);
+    ns.tprintRaw(`${server.hostname} - ${server.maxRam}`);
+  }
+  return ram;
+}
+
 export function main(ns: NS) {
-  listAllFiles(ns);
+  listAllRAM(ns);
 }

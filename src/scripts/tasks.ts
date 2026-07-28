@@ -1,8 +1,7 @@
 import {ScriptArg, NS} from "@ns";
-import { Globals } from "./globals";
 import { getServerXT, ServerXT } from "./serverxt";
-import { get, Server } from "http";
 import { getAllServers } from "./libserver";
+import { Globals } from "./globals";
 
 export class TaskAssignment {
     pid?: number;
@@ -40,6 +39,10 @@ export class AttackAssignment extends TaskAssignment {
         return getServerXT(ns, this.victimName);
     }
 
+    getAgentXT(ns: NS): ServerXT | undefined {
+        return getServerXT(ns, this.agent ?? "");
+    }
+
     static validateVictim(ns: NS, victim: string): boolean {
         if (!ns.serverExists(victim) || ns.getServerMaxMoney(victim) === 0 || ns.getServerMinSecurityLevel(victim) < 0) return false;
         var skill = ns.getPlayer().skills.hacking;
@@ -59,6 +62,7 @@ export class AttackAssignment extends TaskAssignment {
 
 export class ZeroSecDiff extends AttackAssignment {
     public secDiff?: number;
+    public script: string = Globals.scriptWeaken;
 
     constructor(
         public ns: NS,
@@ -82,33 +86,38 @@ export class ZeroSecDiff extends AttackAssignment {
         return this.threads;
     }
 
-    public calculateTotalRAM(ns: NS, attacker: ServerXT): number {
-        return attacker.getWeakenRAM(ns) * (this.threads ?? 1);
-    }
-
-    public locateAgent(ns: NS): boolean {
-        var target = this.getVictimXT(ns);
+    public locateAgent(ns: NS, allowThreadTrim: boolean = false): boolean {
         var servers = getAllServers(ns);
         var threads = Number.POSITIVE_INFINITY;
+        this.agent = undefined;
         for (var [hostname, server] of servers) {
             if (!server.isAgent() || server === undefined) continue;
+            var scriptRAM = server.getWeakenRAM(ns)
             var agentThreads = this.calculateThreads(ns, server);
+            var totalRAM = scriptRAM * agentThreads;
+            if (agentThreads <= threads && (totalRAM <= (server.openRAM() ?? 0) || allowThreadTrim === true)) {
+                if (allowThreadTrim === true && totalRAM >= (server.openRAM() ?? 0)) {
+                    this.threads = Math.floor((server.openRAM() ?? 0) / scriptRAM);
+                } else {
+                    this.threads = agentThreads;
+                }
+                this.setAgent(ns, hostname);
+            }
         }
+        if (this.agent === undefined) return false;
         return true;
     }
 }
 
 export function main(ns: NS) {
-    let threads;
-    let serverName;
-    for (var [hostname, server] of servers) {
-        var newcalc = test.calculateThreads(ns, server, target);
-        if (newcalc <= threads && scriptRam * threads < (server.openRAM() ?? 0)) {
-            threads = newcalc;
-            serverName = hostname;
-            ns.tprintRaw(`setting servername to ${hostname}`);
-            ram = threads * scriptRam;
-        }
+    if (ns.args.length < 1) return;
+    var attack = ZeroSecDiff.createAttack(ns, ns.args[0] as string);
+    if (attack === undefined) return;
+    attack.locateAgent(ns, true);
+    if (attack.agent === undefined) {
+        ns.tprintRaw("Attack failed");
+        return;
     }
-    ns.tprintRaw(`Winner is ${serverName} with ${threads} threads and ${ram} ram requirement`);
+    attack.pid = ns.exec(attack.script, attack.agent, attack.threads, attack.victimName);
+    ns.tprintRaw(`[${attack.pid}] Weaken launched: ${attack.agent} vs. ${attack.victimName} with ${attack.threads}`);
 }
