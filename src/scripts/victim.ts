@@ -22,12 +22,13 @@ export class Victim implements Victim, ServerXT {
 
     public static isVictim(ns: NS, hostname: string): boolean {
         if (!ns.serverExists(hostname)) return false;
-        var server = ns.getServer(hostname);
+        var server = getServerXT(ns, hostname);
+        if (server === undefined) return false;
         if (server.purchasedByPlayer) return false;
         if (!server.hasAdminRights) return false;
         if (server.minDifficulty === undefined || server.hackDifficulty === undefined) return false;
         if (server.openPortCount === undefined || server.numOpenPortsRequired === undefined) return false;
-        if (server.requiredHackingSkill ?? Number.POSITIVE_INFINITY > ns.getPlayer().skills.hacking) return false;
+        if ((server.requiredHackingSkill ?? Number.POSITIVE_INFINITY) > ns.getPlayer().skills.hacking) return false;
         if (server.moneyMax === undefined || server.moneyAvailable === undefined) return false;
         return true;
     }
@@ -37,6 +38,7 @@ export class Victim implements Victim, ServerXT {
         const servers = getAllServerNames(ns);
         for (const server of servers) {
             const victim = Victim.create(ns, server);
+            ns.tprint(victim?.baseDifficulty);
             if (Victim.isVictim(ns, server) && victim !== undefined) victims.add(victim);
         }
         return victims;
