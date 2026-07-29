@@ -43,3 +43,7 @@ export class ServerXT implements Server, ServerXT {
 		return results[0];
     }
 }
+
+export function getServerXT(ns: NS, hostname: string): ServerXT | undefined {
+    return ServerXT.create(ns, hostname);
+}
