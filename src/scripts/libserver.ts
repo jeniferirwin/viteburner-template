@@ -1,82 +1,20 @@
-import {ScriptArg, NS, ProcessInfo, Server} from "@ns";
-import { ServerXT, getServerXT } from "./serverxt";
+import { NS } from "@ns";
 
 /**
  * Discover every reachable server name by recursively scanning from "home",
  * plus any cloud server names.
  * @param ns NetScript reference.
- * @returns An array containing every discovered server hostname.
+ * @returns A set containing every discovered server hostname.
  */
-export function getAllServerNames(ns: NS) {
-  var servers = new Array<string>();
-  servers.push("home");
-  var changed = true;
-  while (changed === true) {
-    changed = false;
-    for (var server of servers.values()) {
-      var results = ns.scan(server);
-      for (var result of results) {
-        if (servers.indexOf(result) < 0) {
-          servers.push(result);
-          changed = true;
-        } 
+export function getAllServerNames(ns: NS): Set<string> {
+    var visited = new Set<string>(["home"]);
+    const queue: string[] = ["home"]
+    while (queue.length > 0) {
+      for (const child of ns.scan(queue.pop())) {
+        if (visited.has(child)) continue;
+        visited.add(child);
+        queue.push(child);
       }
     }
-  }
-  return servers;
-}
-
-export function listAllFiles(ns: NS) {
-  var servers = getAllServers(ns);
-  for (var [serverName, server] of servers) {
-    if (serverName === "home") continue;
-    for (var file of ns.ls(serverName)) {
-      if (file.startsWith("scripts")) continue;
-      ns.tprintRaw(`${serverName} - ${file}`);
-    }
-  }
-}
-
-/**
- * Get the full Server object for every discovered server.
- * @param ns NetScript reference.
- * @returns A map of hostname to its corresponding Server object.
- */
-export function getAllServers(ns: NS): Map<string, ServerXT> {
-  var servers = new Map<string, ServerXT>();
-  var names = getAllServerNames(ns);
-  for (var name of names) {
-    var server = getServerXT(ns, name);
-    if (server !== undefined) servers.set(name, server);
-  }
-  return servers;
-}
-
-/**
- * Get the list of running processes on every discovered server.
- * @param ns NetScript reference.
- * @returns A map of hostname to its array of running ProcessInfo entries.
- */
-export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
-    var servers = getAllServerNames(ns);
-    var pids = new Map<string, ProcessInfo[]>;
-    for (var server of servers.values()) {
-        pids.set(server, ns.ps(server));
-    }
-    return pids;
-}
-
-export function listAllRAM(ns: NS): Map<string, number> {
-  var servers = getAllServers(ns);
-  var ram = new Map<string, number>();
-  for (var server of servers.values()) {
-    if (!server.isAgent()) continue;
-    ram.set(server.hostname, server.maxRam);
-    ns.tprintRaw(`${server.hostname} - ${server.maxRam}`);
-  }
-  return ram;
-}
-
-export function main(ns: NS) {
-  listAllRAM(ns);
+    return visited;
 }
