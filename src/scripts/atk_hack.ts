@@ -1,9 +1,8 @@
 import {NS} from "@ns";
 
-export async function main(ns: NS, target: string = ns.getHostname()) {
+export async function main(ns: NS, target: string = "") {
   if (ns.args.length > 0) {
     target = ns.args[0].toString();
   }
-  var results = await ns.hack(target);
-  ns.tprintRaw(`[${target}] ${results} hacked`)
+  await ns.hack(target);
 }
