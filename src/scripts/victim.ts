@@ -29,11 +29,12 @@ export class Victim implements Victim, ServerXT {
         return true;
     }
 
-    public static getAllVictims(ns: NS): Set<string> {
-        const victims = new Set<string>();
+    public static getAllVictims(ns: NS): Set<Victim> {
+        const victims = new Set<Victim>();
         const servers = getAllServerNames(ns);
         for (const server of servers) {
-            if (Victim.isVictim(ns, server)) victims.add(server);
+            const victim = Victim.create(ns, server);
+            if (Victim.isVictim(ns, server) && victim !== undefined) victims.add(victim);
         }
         return victims;
     }

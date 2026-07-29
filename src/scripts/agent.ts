@@ -27,11 +27,12 @@ export class Agent implements Agent {
         return true;
     }
 
-    public static getAllAgents(ns: NS): Set<string> {
-        const agents = new Set<string>();
+    public static getAllAgents(ns: NS): Set<Agent> {
+        const agents = new Set<Agent>();
         const servers = getAllServerNames(ns);
         for (const server of servers) {
-            if (Agent.isAgent(ns,server)) agents.add(server);
+            const agent = Agent.create(ns, server);
+            if (Agent.isAgent(ns,server) && agent !== undefined) agents.add(agent);
         }
         return agents;
     }
