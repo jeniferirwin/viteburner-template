@@ -47,7 +47,6 @@ export class Agent implements Agent {
 
     public getGrowthThreads(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
         var threads = ns.growthAnalyze(victim.hostname, victim.getMoneyMult(), this.cpuCores);
-        var required = this.totalRAMRequired(ns, Globals.scriptGrow, threads) ?? Number.POSITIVE_INFINITY;
         if (allowThreadTruncate === true) return Agent.truncateThreads(ns, threads, Globals.scriptGrow, this);
         return threads;
     }
@@ -62,7 +61,6 @@ export class Agent implements Agent {
 
     public getHackThreads(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
         var threads = ns.hackAnalyzeThreads(this.hostname, victim.getMoneyMult());
-        var required = this.totalRAMRequired(ns, Globals.scriptHack, threads) ?? Number.POSITIVE_INFINITY;
         if (allowThreadTruncate === true) return Agent.truncateThreads(ns, threads, Globals.scriptHack, this);
         return threads;
     }
@@ -70,7 +68,6 @@ export class Agent implements Agent {
     public getWeakenThreads(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
         var diff = victim.getSecurityDiff();
         var threads = Math.ceil(diff / 0.05);
-        var required = this.totalRAMRequired(ns, Globals.scriptWeaken, threads) ?? Number.POSITIVE_INFINITY;
         if (allowThreadTruncate === true) return Agent.truncateThreads(ns, threads, Globals.scriptWeaken, this);
         return threads;
     }
