@@ -7,6 +7,7 @@ export class TaskAssignment {
     pid?: number;
 
     protected constructor(
+        public script: string,
         public args?: ScriptArg[]
     ) {};
 
@@ -14,25 +15,26 @@ export class TaskAssignment {
         return (this.pid ?? -1) > -1;
     }
 
-    static create(args?: ScriptArg[]): TaskAssignment | undefined {
-        return new TaskAssignment(args);
+    static create(script: string, args?: ScriptArg[]): TaskAssignment | undefined {
+        return new TaskAssignment(script, args);
     }
 }
 
 export class AttackAssignment extends TaskAssignment {
+    public static victims: Array<string> = new Array<string>();
     public agent?: string;
     public threads?: number;
-    public time?: number;
     protected constructor(
-        public ns: NS,
+        public script: string,
         public victimName: string
     ) {
-        super();
+        var args: ScriptArg[] = new Array<ScriptArg>(victimName);
+        super(script, args);
     }
 
-    static createAttack(ns: NS, victim: string): AttackAssignment | undefined {
+    static createAttack(ns: NS, script: string, victim: string): AttackAssignment | undefined {
         if (!AttackAssignment.validateVictim(ns, victim)) return undefined;
-        return new AttackAssignment(ns, victim);
+        return new AttackAssignment(script, victim);
     }
 
     getVictimXT(ns: NS): ServerXT | undefined {
@@ -44,7 +46,7 @@ export class AttackAssignment extends TaskAssignment {
     }
 
     static validateVictim(ns: NS, victim: string): boolean {
-        if (!ns.serverExists(victim) || ns.getServerMaxMoney(victim) === 0 || ns.getServerMinSecurityLevel(victim) < 0) return false;
+        if (!ns.serverExists(victim) || (ns.getServerMaxMoney(victim) ?? 0) === 0 || ns.getServerMinSecurityLevel(victim) === undefined) return false;
         var skill = ns.getPlayer().skills.hacking;
         var required = ns.getServerRequiredHackingLevel(victim);
         if (skill >= required) return true;
@@ -53,36 +55,39 @@ export class AttackAssignment extends TaskAssignment {
 
     public setAgent(ns: NS, agentName: string): boolean {
         if (!ns.serverExists(agentName)) return false;
+        if (!ns.fileExists(this.script, agentName)) return false;
         var server = getServerXT(ns, agentName);
         if (!server?.isAgent()) return false;
         this.agent = agentName;
         return true;
     }
-}
 
-export class ZeroSecDiff extends AttackAssignment {
-    public secDiff?: number;
-    public script: string = Globals.scriptWeaken;
-
-    constructor(
-        public ns: NS,
-        public victimName: string,
-    ) {
-        super(ns, victimName);
+    public launch(ns: NS): boolean {
+        if (this.agent === undefined || (this.threads ?? 0) < 1) return false;
+        this.pid = ns.exec(this.script, this.agent, this.threads, this.victimName); 
+        ns.tprintRaw(`[${this.pid}] ${this.script} launched: ${this.agent} vs. ${this.victimName} with ${this.threads} threads`);
+        return true;
     }
 
-    static createAttack(ns: NS, victim: string): ZeroSecDiff | undefined {
-        if (!ZeroSecDiff.validateVictim(ns, victim)) return undefined;
-        return new ZeroSecDiff(ns, victim);
-    }
+    public calculateThreads(ns: NS, attacker: ServerXT): boolean {
+        switch (this.script) {
+            case Globals.scriptWeaken:
+                var diff = this.getVictimXT(ns)?.getSecurityDiff(ns) ?? 0;
+                if (diff <= 0) return false;
+                this.threads = Math.ceil(diff / 0.05);
+                while (ns.weakenAnalyze((this.threads ?? 0), attacker.cpuCores ?? 1) > diff) {
+                    this.threads--;
+                }
+                this.threads++;
+                return true;
+            case Globals.scriptGrow:
+                var mult = this.getVictimXT(ns)?.getMoneyMult(ns) ?? 0;
+                if (mult <= 1) return false;
+                this.threads = ns.growthAnalyze(attacker.hostname, mult, attacker.cpuCores);
+                return true;
+            case Globals.scriptHack:
 
-    public calculateThreads(ns: NS, attacker: ServerXT): number {
-        var diff = this.getVictimXT(ns)?.getSecurityDiff(ns) ?? 0;
-        this.threads = Math.ceil(diff / 0.05);
-        while (ns.weakenAnalyze((this.threads ?? 0), attacker.cpuCores ?? 1) > diff) {
-            this.threads--;
         }
-        this.threads++;
         return this.threads;
     }
 
@@ -92,7 +97,7 @@ export class ZeroSecDiff extends AttackAssignment {
         this.agent = undefined;
         for (var [hostname, server] of servers) {
             if (!server.isAgent() || server === undefined) continue;
-            var scriptRAM = server.getWeakenRAM(ns)
+            var scriptRAM = ns.getScriptRam(this.script, this.agent);
             var agentThreads = this.calculateThreads(ns, server);
             var totalRAM = scriptRAM * agentThreads;
             if (agentThreads <= threads && (totalRAM <= (server.openRAM() ?? 0) || allowThreadTrim === true)) {
