@@ -2,6 +2,7 @@ import {NS} from "@ns";
 import { getServerXT, ServerXT } from "./serverxt";
 import { Victim } from "./victim";
 import { Globals } from "./globals";
+import { getAllServerNames } from "./libserver";
 
 export interface Agent extends ServerXT {
     isAgent(ns: NS, hostname: string): boolean;
@@ -24,6 +25,15 @@ export class Agent implements Agent {
         if (!server?.hasAdminRights) return false;
         if (server.ramUsed == undefined || (server.maxRam ?? 0) <= 0) return false;
         return true;
+    }
+
+    public static getAllAgents(ns: NS): Set<string> {
+        const agents = new Set<string>();
+        const servers = getAllServerNames(ns);
+        for (const server of servers) {
+            if (Agent.isAgent(ns,server)) agents.add(server);
+        }
+        return agents;
     }
 
     public openRAM() {

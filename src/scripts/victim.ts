@@ -1,5 +1,6 @@
 import {NS} from "@ns";
 import { ServerXT, getServerXT } from "./serverxt";
+import { getAllServerNames } from "./libserver";
 
 export interface Victim extends ServerXT {
     getSecurityDiff(): number;
@@ -26,6 +27,15 @@ export class Victim implements Victim, ServerXT {
         if (server.requiredHackingSkill ?? Number.POSITIVE_INFINITY > ns.getPlayer().skills.hacking) return false;
         if (server.moneyMax === undefined || server.moneyAvailable === undefined) return false;
         return true;
+    }
+
+    public static getAllVictims(ns: NS): Set<string> {
+        const victims = new Set<string>();
+        const servers = getAllServerNames(ns);
+        for (const server of servers) {
+            if (Victim.isVictim(ns, server)) victims.add(server);
+        }
+        return victims;
     }
 
     public getSecurityDiff(): number {
