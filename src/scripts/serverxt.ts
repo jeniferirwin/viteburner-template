@@ -34,8 +34,7 @@ export class ServerXT implements Server, ServerXT {
     }
 
 	getChildren(ns: NS): Array<string> | undefined {
-		var results = ns.scan(this.hostname);
-		return results.slice(1);
+        return ns.scan(this.hostname).slice(1);
 	}
 
     getParent(ns: NS): string | undefined {
