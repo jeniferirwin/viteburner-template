@@ -73,7 +73,7 @@ export class Agent implements Agent, ServerXT {
     }
 
     public getHackThreads(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
-        var threads = ns.hackAnalyzeThreads(this.hostname, victim.getMoneyMult());
+        var threads = Math.ceil(ns.hackAnalyzeThreads(this.hostname, victim.moneyAvailable! * 0.15));
         if (allowThreadTruncate === true) return Agent.truncateThreads(ns, threads, Globals.scriptHack, this);
         return threads;
     }
