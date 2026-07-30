@@ -61,7 +61,9 @@ export class Victim implements Victim, ServerXT {
     }
 
     public getMoneyMult(): number {
-        return this.moneyMax! / this.moneyAvailable!;
+        var mult = this.moneyMax! - this.moneyAvailable!;
+        if (mult === Number.POSITIVE_INFINITY) mult = 10000;
+        return mult;
     }
     public isPrepped(): boolean {
         if (this.getSecurityDiff() <= 0 && this.getMoneyMult() <= 1) return true;
