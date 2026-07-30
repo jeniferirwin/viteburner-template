@@ -8,10 +8,11 @@ export interface Agent extends ServerXT {
     isAgent(ns: NS, hostname: string): boolean;
 }
 
-export class Agent implements Agent {
+export class Agent implements Agent, ServerXT {
     private constructor(ns: NS, hostname: string) {
-        Object.assign(this, getServerXT(ns, hostname))
-        this.getBundle(ns);
+        var server = getServerXT(ns, hostname);
+        server?.getBundle(ns);
+        Object.assign(this, server);
     }
 
     public static create(ns: NS, hostname: string): Agent | undefined {
@@ -51,13 +52,14 @@ export class Agent implements Agent {
         var required = agent.totalRAMRequired(ns, script, threads) ?? Number.POSITIVE_INFINITY;
         if (agent.openRAM() < required) {
             var chunk = ns.getScriptRam(script, agent.hostname);
-            return Math.floor(agent.openRAM() / chunk);
+            var threads = Math.floor(agent.openRAM() / chunk);
+            if (threads < 1) return 1;
         }
         return threads;
     }
 
     public getGrowthThreads(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
-        var threads = ns.growthAnalyze(victim.hostname, victim.getMoneyMult(), this.cpuCores);
+        var threads = Math.ceil(ns.growthAnalyze(victim.hostname, victim.getMoneyMult(), this.cpuCores));
         if (allowThreadTruncate === true) return Agent.truncateThreads(ns, threads, Globals.scriptGrow, this);
         return threads;
     }
@@ -79,7 +81,29 @@ export class Agent implements Agent {
     public getWeakenThreads(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
         var diff = victim.getSecurityDiff();
         var threads = Math.ceil(diff / 0.05);
-        if (allowThreadTruncate === true) return Agent.truncateThreads(ns, threads, Globals.scriptWeaken, this);
+        if (threads < 1) threads = 1;
+        if (allowThreadTruncate === true) {
+            var truncated = Agent.truncateThreads(ns, threads, Globals.scriptWeaken, this);
+            return truncated;
+        }
         return threads;
+    }
+
+    public doWeaken(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
+        const threads = this.getWeakenThreads(ns, victim, allowThreadTruncate);
+        if (threads >= 1) return ns.exec(Globals.scriptWeaken, this.hostname, threads, victim.hostname);
+        return 0;
+    }
+
+    public doGrow(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
+        const threads = this.getGrowthThreads(ns, victim, allowThreadTruncate);
+        if (threads >= 1) return ns.exec(Globals.scriptGrow, this.hostname, threads, victim.hostname);
+        return 0;
+    }
+
+    public doHack(ns: NS, victim: Victim, allowThreadTruncate: boolean): number {
+        const threads = this.getHackThreads(ns, victim, allowThreadTruncate);
+        if (threads >= 1) return ns.exec(Globals.scriptHack, this.hostname, threads, victim.hostname);
+        return 0;
     }
 }

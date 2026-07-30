@@ -38,7 +38,6 @@ export class Victim implements Victim, ServerXT {
         const servers = getAllServerNames(ns);
         for (const server of servers) {
             const victim = Victim.create(ns, server);
-            ns.tprint(victim?.baseDifficulty);
             if (Victim.isVictim(ns, server) && victim !== undefined) victims.add(victim);
         }
         return victims;
@@ -50,7 +49,6 @@ export class Victim implements Victim, ServerXT {
         for (const agent of agents) {
             for (const script of [Globals.scriptGrow, Globals.scriptHack, Globals.scriptWeaken]) {
                 if (ns.getRunningScript(script, agent.hostname, arg)) {
-                    ns.tprintRaw(`${victim.hostname} is being attacked by ${agent.hostname}`);
                     return true;
                 }
             }
