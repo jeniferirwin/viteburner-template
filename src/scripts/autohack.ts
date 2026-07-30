@@ -2,37 +2,59 @@ import {NS} from "@ns";
 import { Victim } from "./victim";
 import { Agent } from "./agent";
 
+
+export function findHackAgent(ns: NS, victim: Victim, agents: Array<Agent>): boolean {
+    for (const agent of agents) {
+        if (agent.hostname === "home" && agent.openRAM() < 64) continue;
+        if (agent.doHack(ns, victim, false) > 0) return true;
+    }
+    for (const agent of agents) {
+        if (agent.hostname === "home" && agent.openRAM() < 64) continue;
+        if (agent.doHack(ns, victim, true) > 0) return true;
+    }
+    return false;
+}
+
+export function findWeakenAgent(ns: NS, victim: Victim, agents: Array<Agent>): boolean {
+    for (const agent of agents) {
+        if (agent.hostname === "home" && agent.openRAM() < 64) continue;
+        if (agent.doWeaken(ns, victim, false) > 0) return true;
+    }
+    for (const agent of agents) {
+        if (agent.hostname === "home" && agent.openRAM() < 64) continue;
+        if (agent.doWeaken(ns, victim, true) > 0) return true;
+    }
+    return false;
+}
+
+export function findGrowAgent(ns: NS, victim: Victim, agents: Array<Agent>): boolean {
+    for (const agent of agents) {
+        if (agent.hostname === "home" && agent.openRAM() < 64) continue;
+        if (agent.doGrow(ns, victim, false) > 0) return true;
+    }
+    for (const agent of agents) {
+        if (agent.hostname === "home" && agent.openRAM() < 64) continue;
+        if (agent.doGrow(ns, victim, true) > 0) return true;
+    }
+    return false;
+}
+
 export async function main(ns: NS) {
     while (true) {
-        var victims_unsorted = Victim.getAllVictims(ns); 
-        var victims = Array.from(victims_unsorted).sort((a, b) => a.requiredHackingSkill! - b.requiredHackingSkill!);
-        var agents_unsorted = Agent.getAllAgents(ns);
-        var agents = Array.from(agents_unsorted).sort((a, b) => b.openRAM() - a.openRAM());
+        var victims = Array.from(Victim.getAllVictims(ns)).sort((a, b) => a.requiredHackingSkill! - b.requiredHackingSkill!);
+        var agents = Array.from(Agent.getAllAgents(ns)).sort((a, b) => b.openRAM() - a.openRAM());
         for (const victim of victims) {
             if (Victim.isBeingAttacked(ns, victim)) continue;
             if (victim.isPrepped()) {
-                for (const agent of agents) {
-                    if (agent.hostname === "home" && agent.openRAM() < 64) continue;
-                    if (agent.doHack(ns, victim, true) > 0) break;
-                }
-                continue;
+                if (findHackAgent(ns, victim, agents) === true) continue;
             }
             if (victim.getSecurityDiff() > 0) {
-                for (const agent of agents) {
-                    if (agent.hostname === "home" && agent.openRAM() < 64) continue;
-                    var pid = agent.doWeaken(ns, victim, true);
-                    if (pid > 0) break;
-                }
-                continue;
+                if (findWeakenAgent(ns, victim, agents) === true) continue;
             }
             if (victim.getMoneyMult() > 1) {
-                for (const agent of agents) {
-                    if (agent.hostname === "home" && agent.openRAM() < 64) continue;
-                    if (agent.doGrow(ns, victim, true) > 0) break;
-                }
-                continue;
+                if (findGrowAgent(ns, victim, agents) === true) continue;
             }
         }
-        await ns.sleep(1000);
+        await ns.sleep(500);
     } 
 }
