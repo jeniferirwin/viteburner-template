@@ -1,4 +1,5 @@
 import {NS, Server} from "@ns";
+import { getAllServerNames } from "./libserver";
 
 export interface ServerXT extends Server {
     crack(ns: NS): boolean;
@@ -33,15 +34,26 @@ export class ServerXT implements Server, ServerXT {
         return ns.scp(ns.ls("home", "scripts"), this.hostname, "home");
     }
 
-	getChildren(ns: NS): Array<string> | undefined {
+	getChildrenNames(ns: NS): Array<string> | undefined {
         return ns.scan(this.hostname).slice(1);
 	}
 
-    getParent(ns: NS): string | undefined {
-		return ns.scan(this.hostname)[0];
+    getParentName(ns: NS): string | undefined {
+        if (this.hostname === "home") return undefined;
+        return ns.scan(this.hostname)[0];
     }
 }
 
 export function getServerXT(ns: NS, hostname: string): ServerXT | undefined {
     return ServerXT.create(ns, hostname);
+}
+
+export function getAllServerXT(ns: NS): Array<ServerXT> | undefined {
+    var xts = new Array<ServerXT>();
+    for (const server of getAllServerNames(ns)) {
+        var xt = getServerXT(ns, server);
+        if (xt !== undefined) xts.push(xt);
+    }
+    if (xts.length < 1) return undefined;
+    return xts;
 }
