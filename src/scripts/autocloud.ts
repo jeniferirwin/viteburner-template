@@ -5,15 +5,15 @@ export async function main(ns: NS) {
     while (true) {
         var tiers = getCloudTiers();
         if (servers.length < ns.cloud.getServerLimit()) {
-            if (ns.cloud.getServerCost(2) < ns.getPlayer().money * 0.05) {
-                ns.cloud.purchaseServer("entropy", 2);
+            if (ns.cloud.getServerCost(32) < ns.getPlayer().money) {
+                ns.cloud.purchaseServer("entropy", 32);
             }
         }
         for (var server of servers) {
             var nextTier = tiers.indexOf(ns.getServerMaxRam(server)) + 1;
             if (nextTier < tiers.length) {
                 var cost = ns.cloud.getServerUpgradeCost(server, tiers[nextTier]);
-                if (cost <= ns.getPlayer().money / servers.length) {
+                if (cost <= ns.getPlayer().money) {
                     ns.cloud.upgradeServer(server, tiers[nextTier]);
                 }   
             }
