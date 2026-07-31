@@ -29,7 +29,7 @@ export class Victim implements Victim, ServerXT {
         if (server.minDifficulty === undefined || server.hackDifficulty === undefined) return false;
         if (server.openPortCount === undefined || server.numOpenPortsRequired === undefined) return false;
         if ((server.requiredHackingSkill ?? Number.POSITIVE_INFINITY) > ns.getPlayer().skills.hacking) return false;
-        if (server.moneyMax === undefined || server.moneyAvailable === undefined) return false;
+        if (server.moneyMax === undefined || server.moneyAvailable === undefined || server.moneyMax === 0) return false;
         return true;
     }
 
