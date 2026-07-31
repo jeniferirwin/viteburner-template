@@ -1,7 +1,15 @@
-import {NS} from "@ns";
+import {NS, BasicHGWOptions} from "@ns";
 import { Victim } from "./victim";
 import { Agent } from "./agent";
 
+
+export function arrangeBatch(ns: NS, victim: Victim, agent: Array<Agent>): boolean {
+    var weakenTime = ns.getWeakenTime(victim.hostname);
+    var growTime = ns.getGrowTime(victim.hostname);
+    var hackTime = ns.getHackTime(victim.hostname);
+    var hackChunk = ns.hackAnalyze(victim.hostname);
+    return false;
+}
 
 export function findHackAgent(ns: NS, victim: Victim, agents: Array<Agent>): boolean {
     for (const agent of agents) {
