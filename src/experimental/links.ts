@@ -1,22 +1,26 @@
 import {NS} from "@ns";
-import { getAllServers } from "./libserver";
+import { ServerXT, getAllServerXT } from "@/scripts/serverxt";
 
 export function main(ns: NS) {
-    var servers = getAllServers(ns);
+    var servers = getAllServerXT(ns);
+    if (servers === undefined) return;
     for (var server of servers) {
-        if (server[1].backdoorInstalled || server[1].purchasedByPlayer) {
-            continue;
-        }
-        ns.tprint(getChain(ns, server[0]));
+        if ((server.backdoorInstalled ?? false) || (server.purchasedByPlayer ?? false)) continue;
+        ns.tprintRaw(getChain(ns, server.hostname));
     }
 }
 
-export function getChain(ns: NS, hostname: string = "home") {
-    var chain = [hostname];
-    var parent = getParentServer(ns, hostname);
+export function getParent(ns: NS, server: string): string | undefined {
+    if (server === "home") return undefined;
+    return ns.scan(server)[0];
+}
+
+export function getChain(ns: NS, server: string): string {
+    var chain = [server];
+    var parent = getParent(ns, server);
     while (parent !== undefined) {
         chain.push(parent);
-        parent = getParentServer(ns, parent);
+        parent = getParent(ns, parent);
     }
     chain.reverse();
     var cutoff = 0;
@@ -29,7 +33,7 @@ export function getChain(ns: NS, hostname: string = "home") {
     }
     var buf = "";
     for (var i = cutoff - 1; i < chain.length - 1; i++) {
-        buf = buf.concat(chain[i], " -> ");
+        buf = buf.concat(chain[i], " ; connect ");
     }
     buf = buf.concat(chain[chain.length - 1]);
     return buf;
