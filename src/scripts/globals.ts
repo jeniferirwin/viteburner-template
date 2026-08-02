@@ -5,6 +5,8 @@ export class Globals {
     static scriptWeaken = this.scriptPath + "atk_weaken.js";
     static scriptHacknet = this.scriptPath + "hacknet.js";
     static scriptShare = this.scriptPath + "sharing.js";
+    
+    static homeOpenRAM = 64;
 
 
     static isString(arg: any) {

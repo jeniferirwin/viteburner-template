@@ -1,9 +1,9 @@
 import {NS} from "@ns";
 
 export enum PORT {
-    DUMMY,
-    PREP,
-    BATCH
+    UNDEFINED,
+    AGENTS,
+    VICTIMS
 }
 
 export class Ports {
@@ -17,12 +17,9 @@ export class Ports {
         return promise;
     }
 
-    static async addTarget(ns: NS, hostname: string, port: PORT): Promise<boolean> {
+    static async addHost(ns: NS, hostname: string, port: PORT): Promise<boolean> {
         await Ports.waitPort(port);
-        const promise = new Promise<boolean>(async (resolve, reject) => {
-            if (!ns.serverExists(hostname)) {
-                reject(`No such server ${hostname}`);
-            }
+        const promise = new Promise<boolean>(async (resolve) => {
             var handle = ns.getPortHandle(port);
             var entries: Set<string>;
             Ports.blocked.add(port);
@@ -40,7 +37,7 @@ export class Ports {
         return promise;
     }
 
-    static async peekTargets(ns: NS, port: PORT): Promise<Set<string>> {
+    static async peekHosts(ns: NS, port: PORT): Promise<Set<string>> {
         await Ports.waitPort(port);
         const promise = new Promise<Set<string>>(async (resolve) => {
             resolve(ns.peek(port).values());
@@ -48,11 +45,11 @@ export class Ports {
         return promise;
     }
 
-    static async targetExists(ns: NS, target: string, port: PORT): Promise<boolean> {
+    static async hostExists(ns: NS, hostname: string, port: PORT): Promise<boolean> {
         await Ports.waitPort(port);
-        var targets = await Ports.peekTargets(ns, port);
+        var hosts = await Ports.peekHosts(ns, port);
         const promise = new Promise<boolean>(async (resolve) => {
-            resolve(targets.has(target));
+            resolve(hosts.has(hostname));
         });
         return promise;
     }
