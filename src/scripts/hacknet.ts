@@ -17,6 +17,6 @@ export async function main(ns: NS) {
                 ns.hacknet.upgradeCore(i);
             }
         }
-        await ns.sleep(1000);
+        await ns.sleep(0);
     }
 }
