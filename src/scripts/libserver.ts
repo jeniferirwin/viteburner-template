@@ -1,6 +1,25 @@
 import { NS, ProcessInfo } from "@ns";
 
 /**
+ * Runs every available port-opening program against a server.
+ *
+ * @remarks
+ * Unconditionally calls {@link NS.brutessh}, {@link NS.ftpcrack}, {@link NS.httpworm},
+ * {@link NS.relaysmtp}, and {@link NS.sqlinject} on `hostname`. Programs the player does not
+ * yet own will throw, so this should only be called once the required programs are available.
+ *
+ * @param ns - Netscript API object.
+ * @param hostname - Hostname of the server to open ports on.
+ */
+export function CrackPorts(ns: NS, hostname: string): void {
+  ns.brutessh(hostname);
+  ns.ftpcrack(hostname);
+  ns.httpworm(hostname);
+  ns.relaysmtp(hostname);
+  ns.sqlinject(hostname);
+}
+
+/**
  * Returns a map of every running process on the given servers.
  *
  * @remarks
@@ -55,7 +74,7 @@ export function GetAllServerNames(ns: NS): Set<string> {
  * @param hostname - Hostname of the server to check.
  * @returns True if the server exists, is rooted, and has usable RAM.
  */
-export function IsAgent(ns: NS, hostname: string) {
+export function IsAgent(ns: NS, hostname: string): boolean {
     if (!ns.serverExists(hostname)) return false;
     if (!ns.hasRootAccess(hostname)) return false;
     if (ns.getServerMaxRam(hostname) <= 0) return false;
@@ -75,7 +94,7 @@ export function IsAgent(ns: NS, hostname: string) {
  * @param hostname - Hostname of the potential victim server.
  * @returns True if an attack script (grow/hack/weaken) targeting `hostname` is currently running.
  */
-export function IsBeingAttacked(ns: NS, servers: Set<string>, hostname: string) {
+export function IsBeingAttacked(ns: NS, servers: Set<string>, hostname: string): boolean {
     if (!IsVictim(ns, hostname)) return false;
     for (const [server, info] of GetAllProcesses(ns, servers)) {
         const filtered: ProcessInfo[] = info.filter((proc) => proc.args.indexOf(hostname) >= 0);
@@ -86,6 +105,24 @@ export function IsBeingAttacked(ns: NS, servers: Set<string>, hostname: string) 
         }
     }
     return false;
+}
+
+/**
+ * Determines whether a server has enough open ports for {@link NS.nuke} to succeed.
+ *
+ * @remarks
+ * Compares the number of ports already opened on the server against the number
+ * required, using {@link NS.getServer}. Returns false if the server does not exist.
+ *
+ * @param ns - Netscript API object.
+ * @param hostname - Hostname of the server to check.
+ * @returns True if the server exists and has at least as many open ports as required.
+ */
+export function IsNukable(ns: NS, hostname: string): boolean {
+  if (!ns.serverExists(hostname)) return false;
+  const server = ns.getServer(hostname);
+  if ((server.openPortCount ?? 0) < (server.numOpenPortsRequired ?? Number.POSITIVE_INFINITY)) return false;
+  return true;
 }
 
 /**
@@ -101,7 +138,7 @@ export function IsBeingAttacked(ns: NS, servers: Set<string>, hostname: string) 
  * @param hostname - Hostname of the server to check.
  * @returns True if the server's money is maxed, security is minimized, and it is not being attacked.
  */
-export function IsPrepped(ns: NS, servers: Set<string>, hostname: string) {
+export function IsPrepped(ns: NS, servers: Set<string>, hostname: string): boolean {
   if (!IsVictim(ns, hostname)) return false;
   if (ns.getServerMaxMoney(hostname) > ns.getServerMoneyAvailable(hostname)) return false;
   if (ns.getServerMinSecurityLevel(hostname) < ns.getServerSecurityLevel(hostname)) return false;
@@ -121,7 +158,7 @@ export function IsPrepped(ns: NS, servers: Set<string>, hostname: string) {
  * @param hostname - Hostname of the server to check.
  * @returns True if the server exists, is within hacking skill range, is rooted, and has money to steal.
  */
-export function IsVictim(ns: NS, hostname: string) {
+export function IsVictim(ns: NS, hostname: string): boolean {
     if (!ns.serverExists(hostname)) return false;
     if (ns.getServerRequiredHackingLevel(hostname) > ns.getPlayer().skills.hacking) return false;
     if (!ns.hasRootAccess(hostname)) return false;
@@ -146,4 +183,26 @@ export function ListAllProcesses(ns: NS, servers: Set<string>): void {
       ns.tprintRaw(`[${hostname}] [${proc.pid}] ${proc.filename} - ${proc.args} (${proc.threads})`);
     }
   }
+}
+
+/**
+ * Attempts to gain root access on a server by cracking its ports and nuking it.
+ *
+ * @remarks
+ * Bails out if the server does not exist or requires more ports than the player could
+ * ever open (more than 5). Otherwise runs {@link CrackPorts} to open every port, then
+ * calls {@link NS.nuke} if {@link IsNukable} reports the server is ready.
+ *
+ * @param ns - Netscript API object.
+ * @param hostname - Hostname of the server to root.
+ * @returns True if root access was obtained (or already present) on the server.
+ */
+export function Rootkit(ns: NS, hostname: string): boolean {
+  if (!ns.serverExists(hostname)) return false;
+  if (ns.hasRootAccess(hostname)) return true;
+  if (ns.getServerNumPortsRequired(hostname) < 0 || ns.getServerNumPortsRequired(hostname) > 5) return false;
+  CrackPorts(ns, hostname);
+  if (IsNukable(ns, hostname)) ns.nuke(hostname);
+  if (!ns.hasRootAccess(hostname)) return false;
+  return true;
 }
