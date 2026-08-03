@@ -226,6 +226,6 @@ export function Rootkit(ns: NS, hostname: string): boolean {
   CrackPorts(ns, hostname);
   if (IsNukable(ns, hostname)) ns.nuke(hostname);
   if (!ns.hasRootAccess(hostname)) return false;
-  PutBundle(ns, hostname);
+  if (IsAgent(ns, hostname)) PutBundle(ns, hostname);
   return true;
 }
