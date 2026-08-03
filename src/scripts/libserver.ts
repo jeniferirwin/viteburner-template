@@ -13,15 +13,6 @@ export function getAllServerNames(ns: NS): Set<string> {
     return visited;
 }
 
-export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
-  const servers = getAllServerNames(ns);
-  const processes = new Map<string, ProcessInfo[]>();
-  for (const server of servers) {
-    processes.set(server, ns.ps(server));
-  }
-  return processes;
-}
-
 export function listAllProcesses(ns: NS): void {
   const processes = getAllProcesses(ns);
   for (var [hostname, proclist] of processes) {
@@ -31,6 +22,49 @@ export function listAllProcesses(ns: NS): void {
   }
 }
 
+export function isAgent(ns: NS, hostname: string) {
+    if (!ns.serverExists(hostname)) return false;
+    if (!ns.hasRootAccess(hostname)) return false;
+    if (ns.getServerMaxRam(hostname) <= 0) return false;
+    return true;
+}
+
+export function isVictim(ns: NS, hostname: string) {
+    if (!ns.serverExists(hostname)) return false;
+    if (ns.getServerRequiredHackingLevel(hostname) > ns.getPlayer().skills.hacking) return false;
+    if (!ns.hasRootAccess(hostname)) return false;
+    if (ns.getServerMaxMoney(hostname) <= 0) return false;
+    return true;
+}
+
+
+export function getAllProcesses(ns: NS): Map<string, ProcessInfo[]> {
+    var processes = new Map<string, ProcessInfo[]>();
+    for (const server of getAllServerNames(ns)) {
+        const ps = ns.ps(server);
+        if (ps.length > 0)
+            processes.set(server, ns.ps(server));
+    }
+    return processes;
+}
+
+export function isBeingAttacked(ns: NS, hostname: string) {
+    if (!isVictim(ns, hostname)) return false;
+    for (var [server, info] of getAllProcesses(ns)) {
+        var filtered: ProcessInfo[] = info.filter((proc) => proc.args.indexOf(hostname) >= 0);
+        for (var entry of filtered) {
+            if (entry.filename.includes("scripts/atk") && entry.args.includes(hostname)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 export function main(ns: NS) {
-  listAllProcesses(ns);
+    ns.disableLog("ALL");
+    var start = performance.now();
+    ns.tprint(isBeingAttacked(ns, "n00dles"));
+    var end = performance.now();
+    ns.tprintRaw(`Total ms: ${end - start}`);
 }
