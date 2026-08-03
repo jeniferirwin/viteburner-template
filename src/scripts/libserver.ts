@@ -1,22 +1,24 @@
 import { NS, ProcessInfo } from "@ns";
 
 /**
- * Runs every available port-opening program against a server.
+ * Runs every port-opening program the player currently owns against a server.
  *
  * @remarks
- * Unconditionally calls {@link NS.brutessh}, {@link NS.ftpcrack}, {@link NS.httpworm},
- * {@link NS.relaysmtp}, and {@link NS.sqlinject} on `hostname`. Programs the player does not
- * yet own will throw, so this should only be called once the required programs are available.
+ * Checks for each cracking program (BruteSSH.exe, FTPCrack.exe, HTTPWorm.exe, RelaySMTP.exe,
+ * SQLInject.exe) on "home" via {@link NS.fileExists}, and only calls the corresponding
+ * {@link NS.brutessh}/{@link NS.ftpcrack}/{@link NS.httpworm}/{@link NS.relaysmtp}/
+ * {@link NS.sqlinject} function for programs that are owned. Programs not yet owned are
+ * skipped rather than throwing.
  *
  * @param ns - Netscript API object.
  * @param hostname - Hostname of the server to open ports on.
  */
 export function CrackPorts(ns: NS, hostname: string): void {
-  ns.brutessh(hostname);
-  ns.ftpcrack(hostname);
-  ns.httpworm(hostname);
-  ns.relaysmtp(hostname);
-  ns.sqlinject(hostname);
+  if (ns.fileExists("BruteSSH.exe", "home")) ns.brutessh(hostname);
+  if (ns.fileExists("FTPCrack.exe", "home")) ns.ftpcrack(hostname);
+  if (ns.fileExists("HTTPWorm.exe", "home")) ns.httpworm(hostname);
+  if (ns.fileExists("RelaySMTP.exe", "home")) ns.relaysmtp(hostname);
+  if (ns.fileExists("SQLInject.exe", "home")) ns.sqlinject(hostname);
 }
 
 /**
@@ -198,7 +200,7 @@ export function ListAllProcesses(ns: NS, servers: Set<string>): void {
  */
 export function PutBundle(ns: NS, hostname: string): boolean {
   if (!IsAgent(ns, hostname)) return false;
-  if (ns.scp(ns.ls("home", "scripts"), hostname, "home")) return true;
+  if (ns.scp(ns.ls("home", "scripts/atk_"), hostname, "home")) return true;
   return false;
 }
 
