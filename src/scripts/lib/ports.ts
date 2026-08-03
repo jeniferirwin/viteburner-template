@@ -1,5 +1,7 @@
 import {NS} from "@ns";
 
+export const CACHE_PORT = 1;
+
 export class Ports {
     static blocked: Set<number> = new Set<number>();
 
@@ -31,17 +33,19 @@ export class Ports {
         return promise;
     }
 
-    static async peekHosts(ns: NS, port: number): Promise<Set<string>> {
+    static async peekHosts(ns: NS, port: number): Promise<Set<string> | undefined> {
         await Ports.waitPort(port);
-        const promise = new Promise<Set<string>>(async (resolve) => {
-            resolve(ns.peek(port).values());
+        const promise = new Promise<Set<string> | undefined>(async (resolve) => {
+            const values = ns.peek(port).values();
+            if (values === "NULL PORT DATA") resolve(undefined);
+            resolve(values);
         });
         return promise;
     }
 
     static async hostExists(ns: NS, hostname: string, port: number): Promise<boolean> {
         await Ports.waitPort(port);
-        var hosts = await Ports.peekHosts(ns, port);
+        var hosts = await Ports.peekHosts(ns, port) ?? new Set<string>();
         const promise = new Promise<boolean>(async (resolve) => {
             resolve(hosts.has(hostname));
         });
