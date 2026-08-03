@@ -186,12 +186,32 @@ export function ListAllProcesses(ns: NS, servers: Set<string>): void {
 }
 
 /**
- * Attempts to gain root access on a server by cracking its ports and nuking it.
+ * Copies every script in the "scripts" folder to a server so it can run attack scripts.
  *
  * @remarks
- * Bails out if the server does not exist or requires more ports than the player could
- * ever open (more than 5). Otherwise runs {@link CrackPorts} to open every port, then
- * calls {@link NS.nuke} if {@link IsNukable} reports the server is ready.
+ * Returns false immediately if `hostname` is not a valid {@link IsAgent | agent}. Otherwise
+ * lists every file under "scripts" on "home" and copies them to `hostname` via {@link NS.scp}.
+ *
+ * @param ns - Netscript API object.
+ * @param hostname - Hostname of the server to copy scripts to.
+ * @returns True if the server is a valid agent and the scripts were copied successfully.
+ */
+export function PutBundle(ns: NS, hostname: string): boolean {
+  if (!IsAgent(ns, hostname)) return false;
+  if (ns.scp(ns.ls("home", "scripts"), hostname, "home")) return true;
+  return false;
+}
+
+/**
+ * Attempts to gain root access on a server, cracking its ports and nuking it if needed,
+ * then seeds it with the attack script bundle.
+ *
+ * @remarks
+ * Returns false if the server does not exist. Returns true immediately if root access is
+ * already present. Bails out if the server requires more ports than the player could ever
+ * open (more than 5). Otherwise runs {@link CrackPorts} to open every port, then calls
+ * {@link NS.nuke} if {@link IsNukable} reports the server is ready. Once rooted, copies the
+ * attack scripts to the server via {@link PutBundle}.
  *
  * @param ns - Netscript API object.
  * @param hostname - Hostname of the server to root.
@@ -204,5 +224,6 @@ export function Rootkit(ns: NS, hostname: string): boolean {
   CrackPorts(ns, hostname);
   if (IsNukable(ns, hostname)) ns.nuke(hostname);
   if (!ns.hasRootAccess(hostname)) return false;
+  PutBundle(ns, hostname);
   return true;
 }
