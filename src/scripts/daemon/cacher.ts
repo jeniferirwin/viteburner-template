@@ -1,8 +1,7 @@
 import {NS} from "@ns";
 import { GetAllServerNames } from "../lib/server";
 import { CrackPorts, IsNukable, PutBundle } from "../lib/attack";
-
-export const CACHE_PORT = 1;
+import { CACHE_PORT } from "../lib/const";
 
 export async function main(ns: NS) {
     while (true) {

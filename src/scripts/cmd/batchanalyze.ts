@@ -1,7 +1,7 @@
 import {NS} from "@ns";
 import { SCRIPTS } from "../lib/const";
 import { IsAgent, IsVictim } from "../lib/server";
-import { CACHE_PORT } from "../daemon/cacher";
+import { CACHE_PORT } from "../lib/const";
 
 export class BatchTask {
     agent: string = "";
