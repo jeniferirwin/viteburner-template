@@ -1,5 +1,6 @@
 import {NS, ProcessInfo} from "@ns";
-import { IsAgent, IsVictim, GetAllProcesses } from "./server";
+import { IsAgent, IsVictim, GetAllProcesses, GetAllServerNames } from "./server";
+import { CacheDB } from "../daemon/cacher";
 
 /**
  * Runs every port-opening program the player currently owns against a server.
@@ -23,11 +24,40 @@ export function CrackPorts(ns: NS, hostname: string): void {
 }
 
 /**
+ * Finds an agent with enough free RAM to run a script with the given thread count.
+ *
+ * @remarks
+ * For each candidate agent, seeds it with the attack script bundle via {@link PutBundle}
+ * if it doesn't already have `script`, then skips it if the script still isn't present or
+ * if the required RAM (script RAM * threads) is 0 or less. Returns the first agent whose
+ * free RAM (max RAM minus used RAM) exceeds the required RAM.
+ *
+ * @param ns - Netscript API object.
+ * @param agents - Set of candidate hostnames to search.
+ * @param script - Path of the script that would be run.
+ * @param threads - Number of threads the script would be run with.
+ * @returns The hostname of an agent with enough free RAM, or undefined if none qualify.
+ */
+export function FindOpenRAM(ns: NS, agents: Set<string>, script: string, threads: number): string | undefined {
+  var ram = ns.getScriptRam(script, "home");
+  for (const agent of agents) {
+    if (!ns.fileExists(script, agent)) PutBundle(ns, agent);
+    if (!ns.fileExists(script, agent)) continue;
+    var total = ram * threads;
+    if (total <= 0) continue;
+    if (ns.getServerMaxRam(agent) - ns.getServerUsedRam(agent) > total) {
+      return agent;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Determines whether a victim server currently has an attack script running against it.
  *
  * @remarks
  * Scans the processes running across all provided `servers` and checks whether any
- * script whose filename includes "scripts/atk" is running with `hostname` as an argument.
+ * script whose filename includes "scripts/task/atk_" is running with `hostname` as an argument.
  * Returns false immediately if `hostname` is not a valid {@link IsVictim | victim}.
  *
  * @param ns - Netscript API object.
@@ -40,7 +70,7 @@ export function IsBeingAttacked(ns: NS, servers: Set<string>, hostname: string):
     for (const [server, info] of GetAllProcesses(ns, servers)) {
         const filtered: ProcessInfo[] = info.filter((proc) => proc.args.indexOf(hostname) >= 0);
         for (const entry of filtered) {
-            if (entry.filename.includes("scripts/atk") && entry.args.includes(hostname)) {
+            if (entry.filename.includes("scripts/task/atk_") && entry.args.includes(hostname)) {
                 return true;
             }
         }
@@ -88,11 +118,12 @@ export function IsPrepped(ns: NS, servers: Set<string>, hostname: string): boole
 }
 
 /**
- * Copies every script in the "scripts" folder to a server so it can run attack scripts.
+ * Copies every attack script to a server so it can run attack scripts.
  *
  * @remarks
  * Returns false immediately if `hostname` is not a valid {@link IsAgent | agent}. Otherwise
- * lists every file under "scripts" on "home" and copies them to `hostname` via {@link NS.scp}.
+ * lists every file under "/scripts/task/atk_" on "home" and copies them to `hostname` via
+ * {@link NS.scp}.
  *
  * @param ns - Netscript API object.
  * @param hostname - Hostname of the server to copy scripts to.
@@ -100,7 +131,7 @@ export function IsPrepped(ns: NS, servers: Set<string>, hostname: string): boole
  */
 export function PutBundle(ns: NS, hostname: string): boolean {
   if (!IsAgent(ns, hostname)) return false;
-  if (ns.scp(ns.ls("home", "scripts/atk_"), hostname, "home")) return true;
+  if (ns.scp(ns.ls("home", "/scripts/task/atk_"), hostname, "home")) return true;
   return false;
 }
 
