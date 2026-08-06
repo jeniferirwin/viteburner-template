@@ -13,10 +13,10 @@ import { NS, ProcessInfo } from "@ns";
  */
 export function GetAllProcesses(ns: NS, servers: Set<string>): Map<string, ProcessInfo[]> {
     const processes = new Map<string, ProcessInfo[]>();
-    for (const server of servers) {
-        const ps = ns.ps(server);
+    for (const hostname of servers) {
+        const ps = ns.ps(hostname);
         if (ps.length > 0)
-            processes.set(server, ns.ps(server));
+            processes.set(hostname, ns.ps(hostname));
     }
     return processes;
 }
@@ -25,7 +25,7 @@ export function GetAllProcesses(ns: NS, servers: Set<string>): Map<string, Proce
  * Discovers every server hostname reachable from "home".
  *
  * @remarks
- * Performs a breadth-first search over the network using {@link NS.scan},
+ * Performs a depth-first search over the network (using a stack) with {@link NS.scan},
  * starting at "home", to find every server connected directly or indirectly.
  *
  * @param ns - Netscript API object.
