@@ -107,10 +107,10 @@ export class Batch {
         this.percent = percent / 100;
         this.moneyTaken = this.percent * this.moneyAvailable;
         this.hack.threads = Math.ceil(this.percent / ns.hackAnalyze(this.target));
-        this.hack.secDiff = ns.hackAnalyzeSecurity(this.hack.threads);
+        this.hack.secDiff = this.hack.threads * 0.002; // it's the same no matter the cores
         this.weakenA.threads = Math.ceil(this.hack.secDiff / 0.05);
         this.grow.threads = Math.ceil(ns.growthAnalyze(this.target, this.moneyTaken, this.grow.cores));
-        this.grow.secDiff = ns.growthAnalyzeSecurity(this.grow.threads, "", this.grow.cores);
+        this.grow.secDiff = this.grow.threads * 0.004; // it's the same no matter the cores
         this.weakenB.threads = Math.ceil(this.grow.secDiff / 0.05);
         this.weakenA.secDiff = ns.weakenAnalyze(this.weakenA.threads, this.weakenA.cores);
         this.weakenB.secDiff = ns.weakenAnalyze(this.weakenB.threads, this.weakenB.cores);
@@ -181,5 +181,5 @@ export function handleArgs(ns: NS): Map<string, any> | undefined {
 
 export function main(ns: NS) {
     const args = handleArgs(ns);
-    var batch = Batch.create(ns, "n00dles", 10);
+    var batch = Batch.create(ns, args?.get("target"), args?.get("percent"));
 }
