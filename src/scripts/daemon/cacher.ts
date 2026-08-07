@@ -50,7 +50,19 @@ export class CacheEntry {
         if (ns.getServerMaxMoney(this.hostname) > 0) this.isVictim = true;
     }
 
-    GetTotalRAM(ns: NS, script: string, threads: number = 1): number {
+    GetWeakenRAM(ns: NS, threads: number = 1): number {
+        return this.GetThreadedRAM(ns, SCRIPTS.weaken);
+    }
+
+    GetHackRAM(ns: NS, threads: number = 1): number {
+        return this.GetThreadedRAM(ns, SCRIPTS.hack, threads);
+    }
+
+    GetGrowRAM(ns: NS, threads: number = 1): number {
+        return this.GetThreadedRAM(ns, SCRIPTS.grow, threads);
+    }
+
+    GetThreadedRAM(ns: NS, script: string, threads: number = 1): number {
         threads = Math.round(threads);
         if (threads < 1 && threads >= Number.POSITIVE_INFINITY) return 0;
         return threads * ns.getScriptRam(script, this.hostname);
