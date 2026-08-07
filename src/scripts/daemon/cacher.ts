@@ -1,6 +1,7 @@
 import {NS, Server} from "@ns";
 import { GetAllServerNames } from "../lib/server";
-import { CACHE_PORT } from "../lib/const";
+
+export const CACHE_PORT = 1;
 
 export enum VictimState {
     NONE,
@@ -70,7 +71,7 @@ export class CacheEntry {
         return ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname);
     }
 
-    GetState(ns: NS): VictimState {
+    GetVictimState(ns: NS): VictimState {
         if (this.isVictim === false) return VictimState.NONE;
         if (this.GetSecDiff(ns) > 0) return VictimState.SECURE;
         if (this.GetMoneyDiff(ns) > 0) return VictimState.BREACHED;
