@@ -1,15 +1,34 @@
 import {NS} from "@ns";
-import { CACHE_PORT } from "../lib/const";
-import { IsVictim } from "../lib/server";
-import { IsBeingAttacked, IsPrepped } from "../lib/attack";
+import { VictimState, CacheDB, CacheEntry } from "./cacher";
 
-export function getIdleVictims(ns: NS, servers: Array<CacheEntry>): Set<string> {
-    var victims = new Set<string>();
-    for (const server of servers) {
-        if (IsVictim(ns, server) && !IsBeingAttacked(ns, servers, server))
-            victims.add(server)
+
+export function AgentsWithEnoughRAM(ns: NS, script: string, servers: CacheDB, threads: number = 1): Array<CacheEntry> {
+    const agents = new Array<CacheEntry>();
+    for (var server of servers.entries.filter((entry) => entry.GetOpenRAM(ns) > entry.GetThreadedRAM(ns, script, threads)))
+        agents.push(server);
+    return agents;
+}
+
+export function FindBestWeakenAgent(ns: NS, servers: CacheDB, target: string): CacheEntry | undefined {
+
+}
+export function BatteringRam(ns: NS, servers: CacheDB, target: string): boolean {
+    var agent;
+    for (const server of servers.entries) {
+        if (server.isAgent === false) continue;
+        if (agent === undefined) {
+            agent = server;
+            continue;
+        }
+        if (server.GetOpenRAM(ns) > agent.GetOpenRAM(ns)) {
+            agent = server;
+        }
     }
-    return victims;
+    if (agent === undefined) return false;
+    const diff = servers.get(target)?.GetSecDiff(ns);
+    if (diff === undefined) return false;
+    var threads = Math.ceil(diff / (0.05 * agent.GetWeakenCoreBonus()));
+    var total = agent.get
 }
 
 export async function main(ns: NS) {
@@ -18,16 +37,13 @@ export async function main(ns: NS) {
             await ns.sleep(5000);
             continue;
         }
-        const servers = ns.peek(CACHE_PORT);
-        if (servers === "NULL PORT DATA") {
+        const servers = ns.peek(CACHE_PORT) as CacheDB | string;
+        if (typeof(servers) === "string") {
             await ns.sleep(5000);
             continue;
         }
-        var victims = getIdleVictims(ns, servers);
-        for (var victim of victims) {
-            if (IsPrepped(ns, servers, victim)) {
-            } else {
-
+        for (var server of servers.entries) {
+            if (server.GetVictimState(ns) === VictimState.SECURE) {
             }
         }
         await ns.sleep(5000);
