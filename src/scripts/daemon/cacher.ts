@@ -50,16 +50,25 @@ export class CacheEntry {
         if (ns.getServerMaxMoney(this.hostname) > 0) this.isVictim = true;
     }
 
-    GetWeakenRAM(ns: NS, threads: number = 1): number {
-        return this.GetThreadedRAM(ns, SCRIPTS.weaken);
+    HasEnoughRAM(ns: NS, script: string, threads: number = 1): boolean {
+        if (!this.isAgent) return false;
+        if (!ns.fileExists(script, this.hostname)) {
+            ns.tprintRaw(`[WARN] Script bundle not on ${this.hostname}!`);
+            return false;
+        }
+        if (this.GetThreadedRAM(ns, script, threads) > this.GetOpenRAM(ns)) return false;
+        return true;
     }
 
-    GetHackRAM(ns: NS, threads: number = 1): number {
-        return this.GetThreadedRAM(ns, SCRIPTS.hack, threads);
+    GetWeakenCoreBonus() {
+        return (1 + (this.cpuCores - 1) / 16);
     }
 
-    GetGrowRAM(ns: NS, threads: number = 1): number {
-        return this.GetThreadedRAM(ns, SCRIPTS.grow, threads);
+    ShrinkToRAM(ns: NS, script: string): number {
+        if (!this.isAgent) return 0;
+        if (!ns.fileExists(script, this.hostname)) return 0;
+        const ram = ns.getScriptRam(script, this.hostname); 
+        return Math.floor(this.GetOpenRAM(ns) / ram);
     }
 
     GetThreadedRAM(ns: NS, script: string, threads: number = 1): number {
