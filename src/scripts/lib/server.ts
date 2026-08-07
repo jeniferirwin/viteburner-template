@@ -45,44 +45,6 @@ export function GetAllServerNames(ns: NS): Set<string> {
 }
 
 /**
- * Determines whether a server can be used as a "hacking agent" (a server that runs attack scripts).
- *
- * @remarks
- * A server qualifies as an agent if it exists, root access has been obtained on it,
- * and it has more than 0 GB of RAM available to run scripts.
- *
- * @param ns - Netscript API object.
- * @param hostname - Hostname of the server to check.
- * @returns True if the server exists, is rooted, and has usable RAM.
- */
-export function IsAgent(ns: NS, hostname: string): boolean {
-    if (!ns.serverExists(hostname)) return false;
-    if (!ns.hasRootAccess(hostname)) return false;
-    if (ns.getServerMaxRam(hostname) <= 0) return false;
-    return true;
-}
-
-/**
- * Determines whether a server is a valid hacking target ("victim").
- *
- * @remarks
- * A server qualifies as a victim if it exists, its required hacking skill does not exceed
- * the player's current hacking skill, root access has been obtained on it, and it has a
- * maximum money value greater than 0.
- *
- * @param ns - Netscript API object.
- * @param hostname - Hostname of the server to check.
- * @returns True if the server exists, is within hacking skill range, is rooted, and has money to steal.
- */
-export function IsVictim(ns: NS, hostname: string): boolean {
-    if (!ns.serverExists(hostname)) return false;
-    if (ns.getServerRequiredHackingLevel(hostname) > ns.getPlayer().skills.hacking) return false;
-    if (!ns.hasRootAccess(hostname)) return false;
-    if (ns.getServerMaxMoney(hostname) <= 0) return false;
-    return true;
-}
-
-/**
  * Prints a formatted line for every running process on the given servers.
  *
  * @remarks
