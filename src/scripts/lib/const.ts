@@ -7,9 +7,3 @@ export const SCRIPTS = {
 }
 
 export const CACHE_PORT = 1;
-
-export function GetTotalRAM(ns: NS, script: string, threads: number = 1): number {
-    threads = Math.round(threads);
-    if (threads < 1 && threads >= Number.POSITIVE_INFINITY) return 0;
-    return threads * ns.getScriptRam(script, "home");
-}
