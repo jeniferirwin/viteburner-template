@@ -1,50 +1,31 @@
-import {NS} from "@ns";
-import { VictimState, CacheDB, CacheEntry } from "./cacher";
+import {NS, RecentScript} from "@ns";
+import { CacheEntry, GetOpenRAM, GetThreadedRAM, SCRIPTS } from "../lib/cache";
+import { GetCache } from "./cacher";
 
-
-export function AgentsWithEnoughRAM(ns: NS, script: string, servers: CacheDB, threads: number = 1): Array<CacheEntry> {
+export function GetBestAgent(ns: NS, cache: CacheEntry[], script: string, threads: number = 1): CacheEntry {
     const agents = new Array<CacheEntry>();
-    for (var server of servers.entries.filter((entry) => entry.GetOpenRAM(ns) > entry.GetThreadedRAM(ns, script, threads)))
+    for (var server of cache.filter((entry) => GetOpenRAM(ns, entry) > GetThreadedRAM(ns, entry, script, threads)))
         agents.push(server);
-    return agents;
-}
-
-export function FindBestWeakenAgent(ns: NS, servers: CacheDB, target: string): CacheEntry | undefined {
-
-}
-export function BatteringRam(ns: NS, servers: CacheDB, target: string): boolean {
-    var agent;
-    for (const server of servers.entries) {
-        if (server.isAgent === false) continue;
-        if (agent === undefined) {
-            agent = server;
-            continue;
-        }
-        if (server.GetOpenRAM(ns) > agent.GetOpenRAM(ns)) {
-            agent = server;
-        }
-    }
-    if (agent === undefined) return false;
-    const diff = servers.get(target)?.GetSecDiff(ns);
-    if (diff === undefined) return false;
-    var threads = Math.ceil(diff / (0.05 * agent.GetWeakenCoreBonus()));
-    var total = agent.get
+    agents.sort((a, b) => b.cpuCores - a.cpuCores);
+    return agents[0];
 }
 
 export async function main(ns: NS) {
+    const cache = GetCache(ns);
+    if (cache === undefined) return;
+    const agent = GetBestAgent(ns, cache, SCRIPTS.weaken, 5);
     while (true) {
         if (!ns.isRunning("/scripts/daemon/cacher.js")) {
             await ns.sleep(5000);
             continue;
         }
-        const servers = ns.peek(CACHE_PORT) as CacheDB | string;
-        if (typeof(servers) === "string") {
+        const servers = GetCache(ns);
+        if (cache === undefined || typeof(servers) === "string") {
+            ns.tprintRaw(`[WARN] Batcher is unable to find the cache!`);
             await ns.sleep(5000);
             continue;
         }
         for (var server of servers.entries) {
-            if (server.GetVictimState(ns) === VictimState.SECURE) {
-            }
         }
         await ns.sleep(5000);
     }
