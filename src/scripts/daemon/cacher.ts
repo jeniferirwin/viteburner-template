@@ -19,7 +19,11 @@ export function RefreshCache(ns: NS) {
     const entries = new Array<CacheEntry>();
     ns.clearPort(CACHE_PORT);
     const servers = GetAllServerNames(ns);
-    for (const server of servers) entries.push(new CacheEntry(ns, ns.getServer(server)));
+    for (const server of servers) {
+        const entry = new CacheEntry(ns, ns.getServer(server));
+        if (!entry.isAgent && !entry.isVictim) continue;
+        entries.push(entry);
+    }
     if (!ns.tryWritePort(CACHE_PORT, entries)) {
         ns.tprintRaw(`[WARN] CacheDB failed to update server list!`);
     }
