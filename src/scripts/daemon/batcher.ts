@@ -17,14 +17,9 @@ export function GetWeakenStats(ns: NS, agent: CacheEntry, victim: CacheEntry): W
     if (!victim.isVictim) return undefined;
     const diff = GetSecDiff(ns, victim);
     const mult = WeakenTable[agent.cpuCores];
-    var stats: WeakenStats = {
-        agent: agent,
-        targetDiff: diff,
-        multiplier: mult,
-        threads: Math.ceil(diff / mult),
-        ram: ns.getScriptRam(SCRIPTS.weaken, agent.hostname)
-    };
-    stats.ram = stats.ram * stats.threads;
+    const threads = Math.ceil(diff / mult);
+    const ram = ns.getScriptRam(SCRIPTS.weaken, agent.hostname) * threads;
+    var stats: WeakenStats = { agent: agent, targetDiff: diff, multiplier: mult, threads: threads, ram: ram };
     if (stats.threads <= 0) return undefined;
     if (stats.ram <= 0) return undefined;
     return stats;
@@ -40,7 +35,8 @@ export function GetBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEnt
         }
         stats = GetWeakenStats(ns, agent, victim);
         if (stats === undefined) continue;
-        if (server.cpuCores > agent.cpuCores && stats.ram < GetOpenRAM(ns, agent)) {
+        // ns.tprint(`${server.hostname} (${ns.getServerMaxRam(server.hostname)}) vs. ${agent.hostname}`);
+        if (server.cpuCores > agent.cpuCores && stats.ram < GetOpenRAM(ns, server)) {
             agent = server;
             continue;
         }
@@ -75,7 +71,7 @@ export async function main(ns: NS) {
                 }
                 const pid = ns.exec(SCRIPTS.weaken, results.agent.hostname, results.threads, server.hostname);
                 if (pid === 0) continue;
-                ns.tprintRaw(`[${pid}] Started weaken attack against ${server.hostname} with ${results.threads} threads on ${results.agent.hostname}`);
+                ns.tprintRaw(`[Started weaken attack against ${server.hostname} with ${results.threads} threads using ${results.ram} RAM on ${results.agent.hostname} (max ${ns.getServerMaxRam(results.agent.hostname)} RAM)`);
             }
         }
         await ns.sleep(5000);
