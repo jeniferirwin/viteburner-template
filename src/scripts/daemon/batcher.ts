@@ -1,10 +1,9 @@
 import {NS} from "@ns";
-import { CacheEntry, GetOpenRAM, GetSecDiff, SCRIPTS } from "../lib/cache";
+import { CacheEntry, GetGrowthRequiredMultiplier, GetMoneyDiff, GetOpenRAM, GetSecDiff, SCRIPTS } from "../lib/cache";
 import { GetCache } from "./cacher";
 import { TARGET_PORT } from "../lib/ports";
 
-export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry): boolean {
-    const diff = GetSecDiff(ns, victim);
+export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
     agents.sort((a, b) => ((a.weakenMult ?? 0) - (b.weakenMult ?? 0)));
     let winner;
@@ -28,6 +27,27 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
     return false;
 }
 
+
+export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
+    var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
+	agents.sort((a, b) => b.cpuCores - a.cpuCores);
+	let threads = 0;
+	let ram = 0;
+	let winner;
+	for (const agent of agents) {
+		threads = ns.growthAnalyze(victim.hostname, GetGrowthRequiredMultiplier(ns, victim), agent.cpuCores);
+		ram = ns.getScriptRam(SCRIPTS.grow, agent.hostname) * threads;
+		if (GetOpenRAM(ns, agent) > ram) {
+			winner = agent;
+			break;
+		}
+	}
+	if (winner === undefined) {
+		winner = agents[0];
+	}
+	return false;
+}
+
 export async function main(ns: NS) {
     while (true) {
         if (!ns.isRunning("/scripts/daemon/cacher.js")) {
@@ -42,14 +62,16 @@ export async function main(ns: NS) {
             continue;
         }
         for (const server of servers) {
-            if (!server.isVictim ||
-                (typeof(targets) !== "string" && targets.has(server.hostname))) {
-                continue;
-            }
+            if (!server.isVictim || (typeof(targets) !== "string" && targets.has(server.hostname))) continue;
             const diff = GetSecDiff(ns, server);
             if (diff > 0) {
-                AssignBestWeakenAgent(ns, servers, server);
+                AssignBestWeakenAgent(ns, servers, server, diff);
+				continue;
             }
+			const moneyDiff = GetMoneyDiff(ns, server);
+			if (moneyDiff > 0) {
+				AssignBestGrowAgent(ns, servers, server, diff);
+			}
         }
         await ns.sleep(5000);
     }
