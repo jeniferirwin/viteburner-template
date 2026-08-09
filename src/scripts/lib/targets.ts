@@ -1,6 +1,5 @@
 import {NS} from "@ns";
-
-export const TARGET_PORT = 2;
+import { TARGET_PORT } from "./ports";
 
 export function RegisterTarget(ns: NS, target: string): boolean {
     var db = ns.peek(TARGET_PORT) as Set<string> | string;
