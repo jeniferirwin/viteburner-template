@@ -1,11 +1,9 @@
 import {NS, Server} from "@ns";
 
-export const CACHE_PORT = 1;
-
 export const SCRIPTS = {
-    hack: "/scripts/task/atk_hack.js",
-    weaken: "/scripts/task/atk_weaken.js",
-    grow: "/scripts/task/atk_grow.js"
+    hack: "scripts/task/atk_hack.js",
+    weaken: "scripts/task/atk_weaken.js",
+    grow: "scripts/task/atk_grow.js"
 }
 
 export enum VictimState {
@@ -50,16 +48,6 @@ export function SetRole(ns: NS, entry: CacheEntry): void {
     if (ns.getServerMaxMoney(entry.hostname) > 0) entry.isVictim = true;
 }
 
-export function HasEnoughRAM(ns: NS, entry: CacheEntry, script: string, threads: number = 1): boolean {
-    if (!entry.isAgent) return false;
-    if (!ns.fileExists(script, entry.hostname)) {
-        ns.tprintRaw(`[WARN] Script bundle not on ${entry.hostname}!`);
-        return false;
-    }
-    if (GetThreadedRAM(ns, entry, script, threads) > GetOpenRAM(ns, entry)) return false;
-    return true;
-}
-
 export function GetWeakenCoreBonus(entry: CacheEntry): number {
     return (1 + (entry.cpuCores - 1) / 16);
 }
@@ -75,6 +63,10 @@ export function GetThreadedRAM(ns: NS, entry: CacheEntry, script: string, thread
     threads = Math.round(threads);
     if (threads < 1 && threads >= Number.POSITIVE_INFINITY) return 0;
     return threads * ns.getScriptRam(script, entry.hostname);
+}
+
+export function CalcWeakenThreads(ns: NS, attacker: CacheEntry, diff: number) {
+
 }
 
 export function CrackPorts(ns: NS, entry: CacheEntry): void {
@@ -118,7 +110,7 @@ export function Rootkit(ns: NS, entry: CacheEntry): boolean {
 
 export function PutBundle(ns: NS, entry: CacheEntry): boolean {
     if (!entry.isAgent) return false;
-    if (ns.scp(ns.ls("home", "/scripts/task/atk_"), entry.hostname, "home")) return true;
+    if (ns.scp(ns.ls("home", "/scripts/"), entry.hostname, "home")) return true;
     return false;
 }
 
