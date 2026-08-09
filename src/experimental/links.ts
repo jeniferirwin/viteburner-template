@@ -1,8 +1,8 @@
 import {NS} from "@ns";
-import { ServerXT, getAllServerXT } from "@/scripts/serverxt";
+import { GetCache } from "@/scripts/daemon/cacher";
 
 export function main(ns: NS) {
-    var servers = getAllServerXT(ns);
+    var servers = GetCache(ns);
     if (servers === undefined) return;
     for (var server of servers) {
         if ((server.backdoorInstalled ?? false) || (server.purchasedByPlayer ?? false)) continue;
