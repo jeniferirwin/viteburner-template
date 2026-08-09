@@ -1,14 +1,51 @@
 import {NS} from "@ns";
-import { CacheEntry, GetOpenRAM, GetThreadedRAM, SCRIPTS } from "../lib/cache";
+import { CacheEntry, GetOpenRAM, GetSecDiff, SCRIPTS } from "../lib/cache";
 import { GetCache } from "./cacher";
-import { TARGET_PORT } from "../lib/targets";
+import { TARGET_PORT } from "../lib/ports";
+import { GetWeakenMultiplier } from "../lib/util";
 
-export function GetBestAgent(ns: NS, cache: CacheEntry[], script: string, threads: number = 1): CacheEntry {
-    const agents = new Array<CacheEntry>();
-    for (var server of cache.filter((entry) => GetOpenRAM(ns, entry) > GetThreadedRAM(ns, entry, script, threads)))
-        agents.push(server);
-    agents.sort((a, b) => b.cpuCores - a.cpuCores);
-    return agents[0];
+export interface WeakenStats {
+    agent: CacheEntry;
+    targetDiff: number;
+    multiplier: number;
+    threads: number;
+    ram: number;
+}
+
+export function GetWeakenStats(ns: NS, agent: CacheEntry, victim: CacheEntry): WeakenStats | undefined {
+    if (!victim.isVictim) return undefined;
+    const mult = GetWeakenMultiplier(ns, agent.cpuCores);
+    const diff = GetSecDiff(ns, victim);
+    var stats: WeakenStats = {
+        agent: agent,
+        targetDiff: diff,
+        multiplier: mult,
+        threads: Math.ceil(diff / mult),
+        ram: ns.getScriptRam(SCRIPTS.weaken, agent.hostname)
+    };
+    stats.ram = stats.ram * stats.threads;
+    if (stats.threads <= 0) return undefined;
+    if (stats.ram <= 0) return undefined;
+    return stats;
+}
+
+export function GetBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry): WeakenStats | undefined {
+    var agent: CacheEntry | undefined = undefined;
+    var stats;
+    for (var server of cache.filter((entry) => entry.isAgent)) {
+        if (agent === undefined) {
+            agent = server;
+            continue;
+        }
+        stats = GetWeakenStats(ns, agent, victim);
+        if (stats === undefined) continue;
+        if (server.cpuCores > agent.cpuCores && stats.ram < GetOpenRAM(ns, agent)) {
+            agent = server;
+            continue;
+        }
+    }
+    if (agent === undefined) return undefined;
+    return stats;
 }
 
 export async function main(ns: NS) {
@@ -25,9 +62,20 @@ export async function main(ns: NS) {
             continue;
         }
         for (const server of servers) {
-            if (server.isAgent) continue;
-            if (typeof(targets) !== "string" && targets.has(server.hostname)) continue;
-            
+            if (!server.isVictim ||
+                (typeof(targets) !== "string" && targets.has(server.hostname))) {
+                continue;
+            }
+            const diff = GetSecDiff(ns, server);
+            if (diff > 0) {
+                const results = GetBestWeakenAgent(ns, servers, server);
+                if (results === undefined) {
+                    continue;
+                }
+                const pid = ns.exec(SCRIPTS.weaken, results.agent.hostname, results.threads, server.hostname);
+                if (pid === 0) continue;
+                ns.tprintRaw(`[${pid}] Started weaken attack against ${server.hostname} with ${results.threads} threads on ${results.agent.hostname}`);
+            }
         }
         await ns.sleep(5000);
     }
