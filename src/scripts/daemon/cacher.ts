@@ -1,7 +1,7 @@
 import { NS } from "@ns";
 import { GetAllServerNames } from "../lib/server";
-import { CACHE_PORT, CacheEntry } from "../lib/cache";
-
+import { CacheEntry, PutBundle } from "../lib/cache";
+import { CACHE_PORT } from "../lib/ports";
 
 export function GetCacheEntry(ns: NS, hostname: string): CacheEntry | undefined {
     var entries = GetCache(ns);
@@ -22,6 +22,7 @@ export function RefreshCache(ns: NS) {
     for (const server of servers) {
         const entry = new CacheEntry(ns, ns.getServer(server));
         if (!entry.isAgent && !entry.isVictim) continue;
+        PutBundle(ns, entry);
         entries.push(entry);
     }
     if (!ns.tryWritePort(CACHE_PORT, entries)) {
