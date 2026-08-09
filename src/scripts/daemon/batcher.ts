@@ -2,7 +2,8 @@ import {NS} from "@ns";
 import { CacheEntry, GetOpenRAM, GetSecDiff, SCRIPTS } from "../lib/cache";
 import { GetCache } from "./cacher";
 import { TARGET_PORT } from "../lib/ports";
-import { GetWeakenMultiplier } from "../lib/util";
+
+export const WeakenTable: Array<number> = [0, ...Array.from({length: 199}, (_, i) => 0.05 * (1 + i / 16))];
 
 export interface WeakenStats {
     agent: CacheEntry;
@@ -14,8 +15,8 @@ export interface WeakenStats {
 
 export function GetWeakenStats(ns: NS, agent: CacheEntry, victim: CacheEntry): WeakenStats | undefined {
     if (!victim.isVictim) return undefined;
-    const mult = GetWeakenMultiplier(ns, agent.cpuCores);
     const diff = GetSecDiff(ns, victim);
+    const mult = WeakenTable[agent.cpuCores];
     var stats: WeakenStats = {
         agent: agent,
         targetDiff: diff,
