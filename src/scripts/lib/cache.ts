@@ -1,5 +1,7 @@
 import {NS, Server} from "@ns";
 
+export const WeakenTable: Array<number> = [0, ...Array.from({length: 199}, (_, i) => 0.05 * (1 + i / 16))];
+
 export const SCRIPTS = {
     hack: "scripts/task/atk_hack.js",
     weaken: "scripts/task/atk_weaken.js",
@@ -23,6 +25,7 @@ export class CacheEntry {
     openPortCount?: number;
     isAgent: boolean = false;
     isVictim: boolean = false;
+    weakenMult?: number;
 
     constructor(ns: NS, server: Server) {
         this.hostname = server.hostname;
@@ -167,10 +170,10 @@ export function SetRole(ns: NS, entry: CacheEntry): void {
     if (entry.purchasedByPlayer) {
         entry.isAgent = true;
         entry.isVictim = false;
-        return;
     }
     if (ns.getServerMaxRam(entry.hostname) > 0) entry.isAgent = true;
     if (ns.getServerMaxMoney(entry.hostname) > 0) entry.isVictim = true;
+    if (entry.isAgent) entry.weakenMult = WeakenTable[entry.cpuCores];
 }
 
 /**
