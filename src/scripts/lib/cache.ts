@@ -48,25 +48,11 @@ export function SetRole(ns: NS, entry: CacheEntry): void {
     if (ns.getServerMaxMoney(entry.hostname) > 0) entry.isVictim = true;
 }
 
-export function GetWeakenCoreBonus(entry: CacheEntry): number {
-    return (1 + (entry.cpuCores - 1) / 16);
-}
-
 export function ShrinkToRAM(ns: NS, entry: CacheEntry, script: string): number {
     if (!entry.isAgent) return 0;
     if (!ns.fileExists(script, entry.hostname)) return 0;
     const ram = ns.getScriptRam(script, entry.hostname);
     return Math.floor(GetOpenRAM(ns, entry) / ram);
-}
-
-export function GetThreadedRAM(ns: NS, entry: CacheEntry, script: string, threads: number = 1): number {
-    threads = Math.round(threads);
-    if (threads < 1 && threads >= Number.POSITIVE_INFINITY) return 0;
-    return threads * ns.getScriptRam(script, entry.hostname);
-}
-
-export function CalcWeakenThreads(ns: NS, attacker: CacheEntry, diff: number) {
-
 }
 
 export function CrackPorts(ns: NS, entry: CacheEntry): void {
@@ -104,7 +90,6 @@ export function Rootkit(ns: NS, entry: CacheEntry): boolean {
     CrackPorts(ns, entry);
     if (IsNukable(entry)) ns.nuke(entry.hostname);
     if (!ns.hasRootAccess(entry.hostname)) return false;
-    PutBundle(ns, entry);
     return true;
 }
 
