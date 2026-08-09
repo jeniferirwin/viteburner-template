@@ -57,6 +57,21 @@ export function CrackPorts(ns: NS, entry: CacheEntry): void {
 }
 
 /**
+ * Get the factor a victim server's money must be multiplied by to reach its maximum.
+ * @remarks
+ * Returns the ratio of the server's maximum money to its currently available money, suitable for
+ * passing to ns.growthAnalyze. A fully grown server reports 1, and a server drained to no money
+ * reports Infinity.
+ * @param ns - Netscript namespace.
+ * @param victim - Cache entry for the target server.
+ * @returns Growth multiplier needed to restore the server to maximum money, or 0 if the server is not a victim.
+ */
+export function GetGrowthRequiredMultiplier(ns: NS, victim: CacheEntry): number {
+	if (!victim.isVictim) return 0;
+	return ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
+}
+
+/**
  * Get the amount of money missing from a victim server.
  * @remarks
  * Returns the difference between the server's maximum money and its currently available money.
