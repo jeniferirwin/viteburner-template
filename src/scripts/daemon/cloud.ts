@@ -5,8 +5,8 @@ export async function main(ns: NS) {
     while (true) {
         var tiers = getCloudTiers();
         if (servers.length < ns.cloud.getServerLimit()) {
-            if (ns.cloud.getServerCost(32) < ns.getPlayer().money) {
-                ns.cloud.purchaseServer("entropy", 32);
+            if (ns.cloud.getServerCost(2 ** 10) < ns.getPlayer().money) {
+                ns.cloud.purchaseServer("entropy", 2 ** 10);
             }
         }
         for (var server of servers) {
