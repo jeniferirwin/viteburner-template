@@ -45,8 +45,6 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	if (winner === undefined) {
 		winner = agents[0];
 	}
-<<<<<<< Updated upstream
-=======
     if (ns.exec(SCRIPTS.grow, winner.hostname, threads, victim.hostname)) {
         // ns.tprintRaw(`[GROW] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
@@ -77,7 +75,6 @@ export function AssignBestHackAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
         // ns.tprintRaw(`[HACK] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
->>>>>>> Stashed changes
 	return false;
 }
 
