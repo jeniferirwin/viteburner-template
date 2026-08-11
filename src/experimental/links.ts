@@ -1,5 +1,4 @@
 import {NS} from "@ns";
-import { GetCache } from "@/scripts/daemon/cacher";
 import { GetAllServerNames } from "@/scripts/lib/server";
 
 export function main(ns: NS) {
