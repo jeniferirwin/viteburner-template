@@ -5,6 +5,7 @@ import { TARGET_PORT } from "../lib/ports";
 
 export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
+    if (agents.length === 0) return false;
     agents.sort((a, b) => ((a.weakenMult ?? 0) - (b.weakenMult ?? 0)));
     let winner;
     let threads = 0;
@@ -21,7 +22,7 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.weaken, winner.hostname));
     }
     if (ns.exec(SCRIPTS.weaken, winner.hostname, threads, victim.hostname)) {
-        // ns.tprintRaw(`[WEAKEN] ${winner.hostname} (${threads * (winner.weakenMult ?? 0)}) vs. ${victim.hostname} (${GetSecDiff(ns, victim)}) with ${threads} threads`);
+        ns.tprintRaw(`[WEAKEN] ${winner.hostname} (${threads * (winner.weakenMult ?? 0)}) vs. ${victim.hostname} (${GetSecDiff(ns, victim)}) with ${threads} threads`);
         return true;
     }
     return false;
@@ -30,6 +31,7 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
 
 export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
+    if (agents.length === 0) return false;
 	agents.sort((a, b) => b.cpuCores - a.cpuCores);
 	let threads = 0;
 	let ram = 0;
@@ -44,9 +46,10 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	}
 	if (winner === undefined) {
 		winner = agents[0];
+        threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.grow, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.grow, winner.hostname, threads, victim.hostname)) {
-        // ns.tprintRaw(`[GROW] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
+        ns.tprintRaw(`[GROW] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
 	return false;
@@ -72,7 +75,7 @@ export function AssignBestHackAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.hack, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.hack, winner.hostname, threads, victim.hostname)) {
-        // ns.tprintRaw(`[HACK] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
+        ns.tprintRaw(`[HACK] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
 	return false;
@@ -94,14 +97,18 @@ export async function main(ns: NS) {
         for (const server of servers) {
             if (!server.isVictim || (typeof(targets) !== "string" && targets.has(server.hostname))) continue;
             const diff = GetSecDiff(ns, server);
-            if (diff > 0) {
+            if (diff > 0 && ns.getWeakenTime(server.hostname) <= 60 * 60 * 1000) {
                 AssignBestWeakenAgent(ns, servers, server, diff);
 				continue;
             }
 			const moneyDiff = GetMoneyDiff(ns, server);
-			if (moneyDiff > 0) {
+			if (moneyDiff > 0 && ns.getGrowTime(server.hostname) <= 60 * 60 * 1000) {
 				AssignBestGrowAgent(ns, servers, server, diff);
+                continue;
 			}
+            if (moneyDiff === 0 && diff === 0 && ns.getHackTime(server.hostname) < 60 * 60 * 1000) {
+                AssignBestHackAgent(ns, servers, server, 0.50);
+            }
         }
         await ns.sleep(5000);
     }
