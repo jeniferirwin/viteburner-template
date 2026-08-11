@@ -1,12 +1,15 @@
 import {NS} from "@ns";
 import { GetCache } from "@/scripts/daemon/cacher";
+import { GetAllServerNames } from "@/scripts/lib/server";
 
 export function main(ns: NS) {
-    var servers = GetCache(ns);
+    var servers = GetAllServerNames(ns);
     if (servers === undefined) return;
     for (var server of servers) {
-        if ((server.backdoorInstalled ?? false) || (server.purchasedByPlayer ?? false)) continue;
-        ns.tprintRaw(getChain(ns, server.hostname));
+        var obj = ns.getServer(server);
+        if ((obj.backdoorInstalled ?? false) || (obj.purchasedByPlayer ?? false)) continue;
+        if (server === "w0r1d_d43m0n" || server === "I.I.I.I" || server === "run4theh111z" || server === "The-Cave" || server === "CSEC" || server === "avmnite-02h")
+            ns.tprintRaw(getChain(ns, server));
     }
 }
 

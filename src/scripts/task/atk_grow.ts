@@ -8,6 +8,6 @@ export async function main(ns: NS) {
   const start = performance.now();
   await ns.grow(target, { additionalMsec: padms });
   const end = performance.now();
-  ns.tprintRaw(`Grow vs. ${target} finished: ${end - start}ms ${(end - start) / 1000}s`);
+  // ns.tprintRaw(`Grow vs. ${target} finished: ${end - start}ms ${(end - start) / 1000}s`);
   UnregisterTarget(ns, target);
 }
