@@ -35,7 +35,7 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	let ram = 0;
 	let winner;
 	for (const agent of agents) {
-		threads = ns.growthAnalyze(victim.hostname, GetGrowthRequiredMultiplier(ns, victim), agent.cpuCores);
+		threads = Math.ceil(ns.growthAnalyze(victim.hostname, GetGrowthRequiredMultiplier(ns, victim), agent.cpuCores));
 		ram = ns.getScriptRam(SCRIPTS.grow, agent.hostname) * threads;
 		if (GetOpenRAM(ns, agent) > ram) {
 			winner = agent;
