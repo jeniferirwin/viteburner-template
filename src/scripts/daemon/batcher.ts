@@ -12,7 +12,7 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
     for (var agent of agents) {
         threads = Math.ceil(diff / (agent.weakenMult ?? 0));
         var ram = ns.getScriptRam(SCRIPTS.weaken, agent.hostname);
-        if (GetOpenRAM(ns, agent) > threads * ram) {
+        if (GetOpenRAM(ns, agent, true) > threads * ram) {
             winner = agent;
             break;
         }
@@ -39,7 +39,7 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	for (const agent of agents) {
 		threads = Math.ceil(ns.growthAnalyze(victim.hostname, GetGrowthRequiredMultiplier(ns, victim), agent.cpuCores));
 		ram = ns.getScriptRam(SCRIPTS.grow, agent.hostname) * threads;
-		if (GetOpenRAM(ns, agent) > ram || (agent.hostname === "home" && GetOpenRAM(ns, agent) > ram + 32)) {
+		if (GetOpenRAM(ns, agent, true) > ram) {
 			winner = agent;
 			break;
 		}
@@ -65,7 +65,7 @@ export function AssignBestHackAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	for (const agent of agents) {
 		threads = Math.ceil(ns.hackAnalyzeThreads(victim.hostname, ns.getServerMoneyAvailable(victim.hostname) * percent));
 		ram = ns.getScriptRam(SCRIPTS.hack, agent.hostname) * threads;
-		if (GetOpenRAM(ns, agent) > ram) {
+		if (GetOpenRAM(ns, agent, true) > ram) {
 			winner = agent;
 			break;
 		}

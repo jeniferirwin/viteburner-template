@@ -92,9 +92,12 @@ export function GetMoneyDiff(ns: NS, entry: CacheEntry): number {
  * @param entry - Cache entry for the target server.
  * @returns Free RAM (in GB) on the server, or 0 if the server is not an agent.
  */
-export function GetOpenRAM(ns: NS, entry: CacheEntry): number {
+export function GetOpenRAM(ns: NS, entry: CacheEntry, reserveIfHome: boolean = false): number {
     if (entry.isAgent === false) return 0;
-    return ns.getServerMaxRam(entry.hostname) - ns.getServerUsedRam(entry.hostname);
+    var used = ns.getServerUsedRam(entry.hostname);
+    if (reserveIfHome && entry.hostname === "home")
+        used += 32;
+    return ns.getServerMaxRam(entry.hostname) - used;
 }
 
 /**
