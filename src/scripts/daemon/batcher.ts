@@ -22,7 +22,7 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.weaken, winner.hostname));
     }
     if (ns.exec(SCRIPTS.weaken, winner.hostname, threads, victim.hostname)) {
-        ns.tprintRaw(`[WEAKEN] ${winner.hostname} (${threads * (winner.weakenMult ?? 0)}) vs. ${victim.hostname} (${GetSecDiff(ns, victim)}) with ${threads} threads`);
+        // ns.tprintRaw(`[WEAKEN] ${winner.hostname} (${threads * (winner.weakenMult ?? 0)}) vs. ${victim.hostname} (${GetSecDiff(ns, victim)}) with ${threads} threads`);
         return true;
     }
     return false;
@@ -39,7 +39,7 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	for (const agent of agents) {
 		threads = Math.ceil(ns.growthAnalyze(victim.hostname, GetGrowthRequiredMultiplier(ns, victim), agent.cpuCores));
 		ram = ns.getScriptRam(SCRIPTS.grow, agent.hostname) * threads;
-		if (GetOpenRAM(ns, agent) > ram) {
+		if (GetOpenRAM(ns, agent) > ram || (agent.hostname === "home" && GetOpenRAM(ns, agent) > ram + 32)) {
 			winner = agent;
 			break;
 		}
@@ -49,7 +49,7 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.grow, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.grow, winner.hostname, threads, victim.hostname)) {
-        ns.tprintRaw(`[GROW] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
+        // ns.tprintRaw(`[GROW] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
 	return false;
@@ -75,7 +75,7 @@ export function AssignBestHackAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.hack, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.hack, winner.hostname, threads, victim.hostname)) {
-        ns.tprintRaw(`[HACK] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
+        // ns.tprintRaw(`[HACK] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
 	return false;
