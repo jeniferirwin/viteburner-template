@@ -1,7 +1,17 @@
 import { NS } from "@ns";
 import { GetAllServerNames } from "../lib/server";
-import { CacheEntry, PutBundle } from "../lib/cache";
+import { CacheEntry, PutBundle, GetOpenRAM } from "../lib/cache";
 import { CACHE_PORT } from "../lib/ports";
+
+export function GetAgents(ns: NS, cache: CacheEntry[]): CacheEntry[] {
+    var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x, true) >= 1.7);
+    return agents;
+}
+
+export function GetVictims(cache: CacheEntry[]): CacheEntry[] {
+    var victims = cache.filter((x) => x.isVictim);
+    return victims;
+}
 
 export function GetCacheEntry(ns: NS, hostname: string): CacheEntry | undefined {
     var entries = GetCache(ns);
