@@ -190,7 +190,7 @@ export function SetRole(ns: NS, entry: CacheEntry): void {
         entry.isVictim = false;
     }
     if (ns.getServerMaxRam(entry.hostname) > 0) entry.isAgent = true;
-    if (ns.getServerMaxMoney(entry.hostname) > 0) entry.isVictim = true;
+    if (ns.getServerMaxMoney(entry.hostname) > 0 && ns.getServerRequiredHackingLevel(entry.hostname) <= ns.getPlayer().skills.hacking) entry.isVictim = true;
     if (entry.isAgent) entry.weakenMult = WeakenTable[entry.cpuCores];
 }
 
