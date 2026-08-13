@@ -3,6 +3,35 @@ import { CacheEntry, GetGrowthRequiredMultiplier, GetMoneyDiff, GetOpenRAM, GetS
 import { GetCache } from "./cacher";
 import { TARGET_PORT } from "../lib/ports";
 
+export function DistributeWeakenJob(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
+    var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
+    if (agents.length === 0) return false;
+    agents.sort((a, b) => ((a.weakenMult ?? 0) - (b.weakenMult ?? 0)));
+    let threads = 0;
+    let diffLeft = diff;
+    let jobs = new Map<string, number>();
+    for (var agent of agents) {
+        if (diffLeft <= 0) break;
+        var ram = ns.getScriptRam(SCRIPTS.weaken, agent.hostname);
+        threads = Math.floor(GetOpenRAM(ns, agent, true) / ram);
+        if (threads <= 0) threads = 1;
+        diffLeft -= ns.weakenAnalyze(threads, agent.cpuCores);
+        jobs.set(agent.hostname, threads);
+    }
+    if (jobs.size <= 0) return false;
+    var pids = [];
+    for (var [hostname, threadCount] of jobs) {
+        pids.push(ns.exec(SCRIPTS.weaken, hostname, threadCount, victim.hostname));
+    }
+    if (pids.includes(0)) {
+        for (var pid of pids) {
+            ns.kill(pid);
+        }
+        return false;
+    }
+    return true;
+}
+
 export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
     if (agents.length === 0) return false;
@@ -17,14 +46,8 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
             break;
         }
     }
-    if (winner === undefined) {
-        winner = agents[0];
-        threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.weaken, winner.hostname));
-    }
-    if (ns.exec(SCRIPTS.weaken, winner.hostname, threads, victim.hostname)) {
-        // ns.tprintRaw(`[WEAKEN] ${winner.hostname} (${threads * (winner.weakenMult ?? 0)}) vs. ${victim.hostname} (${GetSecDiff(ns, victim)}) with ${threads} threads`);
-        return true;
-    }
+    if (winner === undefined) return DistributeWeakenJob(ns, cache, victim, diff);
+    if (ns.exec(SCRIPTS.weaken, winner.hostname, threads, victim.hostname)) return true;
     return false;
 }
 
@@ -49,7 +72,6 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.grow, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.grow, winner.hostname, threads, victim.hostname)) {
-        // ns.tprintRaw(`[GROW] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
 	return false;
@@ -64,6 +86,7 @@ export function AssignBestHackAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	let winner;
 	for (const agent of agents) {
 		threads = Math.ceil(ns.hackAnalyzeThreads(victim.hostname, ns.getServerMoneyAvailable(victim.hostname) * percent));
+        if (threads < 1) continue;
 		ram = ns.getScriptRam(SCRIPTS.hack, agent.hostname) * threads;
 		if (GetOpenRAM(ns, agent, true) > ram) {
 			winner = agent;
@@ -75,7 +98,6 @@ export function AssignBestHackAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
         threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.hack, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.hack, winner.hostname, threads, victim.hostname)) {
-        // ns.tprintRaw(`[HACK] ${winner.hostname} vs. ${victim.hostname} with ${threads} threads`);
         return true;
     }
 	return false;
@@ -106,7 +128,7 @@ export async function main(ns: NS) {
 				AssignBestGrowAgent(ns, servers, server, diff);
                 continue;
 			}
-            if (moneyDiff === 0 && diff === 0 && ns.getHackTime(server.hostname) < 60 * 60 * 1000) {
+            if (ns.getServerRequiredHackingLevel(server.hostname) <= ns.getPlayer().skills.hacking && moneyDiff === 0 && diff === 0 && ns.getHackTime(server.hostname) < 60 * 60 * 1000) {
                 AssignBestHackAgent(ns, servers, server, 0.50);
             }
         }
