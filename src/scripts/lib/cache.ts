@@ -203,7 +203,7 @@ export function SetRole(ns: NS, entry: CacheEntry): void {
  * @param script - Path of the script to size against.
  * @returns Number of threads the server's open RAM can support for the script.
  */
-export function ShrinkToRAM(ns: NS, entry: CacheEntry, script: string): number {
+export function GetMaxThreads(ns: NS, entry: CacheEntry, script: string): number {
     if (!entry.isAgent) return 0;
     if (!ns.fileExists(script, entry.hostname)) return 0;
     const ram = ns.getScriptRam(script, entry.hostname);
