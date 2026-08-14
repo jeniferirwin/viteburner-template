@@ -1,5 +1,5 @@
 import {NS} from "@ns";
-import { RegisterTarget, UnregisterTarget } from "../lib/targets";
+import { RegisterTarget, UnregisterTarget} from "@/scripts/daemon/cacher"
 
 export async function main(ns: NS) {
   const target = ns.args[0] as string;
