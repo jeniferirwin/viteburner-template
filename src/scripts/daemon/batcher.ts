@@ -1,7 +1,41 @@
 import {NS} from "@ns";
 import { CacheEntry, GetGrowthRequiredMultiplier, GetMoneyDiff, GetOpenRAM, GetSecDiff, SCRIPTS } from "../lib/cache";
-import { GetCache } from "./cacher";
+import { GetAgents, GetCache } from "./cacher";
 import { TARGET_PORT } from "../lib/ports";
+
+export function GetHighestGrowSecAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry): CacheEntry {
+}
+
+export function AssignGWJob(ns: NS, cache: CacheEntry[], victim: CacheEntry): boolean {
+
+    var agents = GetAgents(ns, cache);
+    if (agents.length === 0) return false;
+    agents.sort((a, b) => ((a.weakenMult ?? 0) - (b.weakenMult ?? 0)));
+    const mult = ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
+    let growAgent;
+    let growThreads;
+    let weakenAgent;
+    let weakenThreads;
+    let agent;
+    for (var i = 0; i < agents.length; i++) {
+        agent = agents[i];
+        if (growAgent === undefined && weakenAgent === undefined) {
+            growThreads = Math.ceil(ns.growthAnalyze(victim.hostname, mult, agent.cpuCores));
+            if (GetOpenRAM(ns, agent, true) >= growThreads * ns.getScriptRam(SCRIPTS.grow, agent.hostname)) {
+                growAgent = agent;
+                i = 0;
+                continue;
+            }
+        }
+        if (growAgent !== undefined && weakenAgent === undefined) {
+            weakenThreads = Math.ceil(ns.growthAnalyzeSecurity(growThreads!, growAgent!.hostname, growAgent!.cpuCores) / (agent.weakenMult ?? 0));
+            if (GetOpenRAM(ns, agent, true) >= weakenThreads * ns.getScriptRam(SCRIPTS.weaken, agent.hostname)) {
+                weakenAgent = agent;
+                break;
+            }
+        }
+    }
+}
 
 export function DistributeWeakenJob(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
@@ -69,7 +103,7 @@ export function AssignBestGrowAgent(ns: NS, cache: CacheEntry[], victim: CacheEn
 	}
 	if (winner === undefined) {
 		winner = agents[0];
-        threads = Math.floor(GetOpenRAM(ns, winner) / ns.getScriptRam(SCRIPTS.grow, winner.hostname));
+        threads = Math.floor(GetOpenRAM(ns, winner, true) / ns.getScriptRam(SCRIPTS.grow, winner.hostname));
 	}
     if (ns.exec(SCRIPTS.grow, winner.hostname, threads, victim.hostname)) {
         return true;
@@ -110,12 +144,15 @@ export async function main(ns: NS) {
             continue;
         }
         const servers = GetCache(ns) as Array<CacheEntry> | undefined;
-        const targets = ns.peek(TARGET_PORT) as Set<string> | string;
         if (servers === undefined || typeof(servers) === "string") {
             ns.tprintRaw(`[WARN] Batcher is unable to find the cache!`);
             await ns.sleep(5000);
             continue;
         }
+
+        const targets = ns.peek(TARGET_PORT) as Set<string> | string;
+        const agents = GetAgents(ns, servers);
+
         for (const server of servers) {
             if (!server.isVictim || (typeof(targets) !== "string" && targets.has(server.hostname))) continue;
             const diff = GetSecDiff(ns, server);
@@ -125,12 +162,15 @@ export async function main(ns: NS) {
             }
 			const moneyDiff = GetMoneyDiff(ns, server);
 			if (moneyDiff > 0 && ns.getGrowTime(server.hostname) <= 60 * 60 * 1000) {
+                ns.tprintRaw(`${server.hostname} ${moneyDiff}`);
 				AssignBestGrowAgent(ns, servers, server, diff);
                 continue;
 			}
+            /*
             if (ns.getServerRequiredHackingLevel(server.hostname) <= ns.getPlayer().skills.hacking && moneyDiff === 0 && diff === 0 && ns.getHackTime(server.hostname) < 60 * 60 * 1000) {
                 AssignBestHackAgent(ns, servers, server, 0.50);
             }
+                */
         }
         await ns.sleep(5000);
     }
