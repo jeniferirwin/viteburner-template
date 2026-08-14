@@ -1,7 +1,6 @@
 import {NS} from "@ns";
-import { GetCache, GetCacheEntry, GetAgents } from "../daemon/cacher";
-import { CacheEntry } from "../lib/cache";
-import { SCRIPTS } from "../lib/cache";
+import { CacheEntry, GetCache, GetCacheEntry, GetAgents } from "../daemon/cacher";
+import { SCRIPTS } from "../config";
 
 export type MPSData = {
     victim: string,
