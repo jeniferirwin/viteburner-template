@@ -130,6 +130,19 @@ export function GetAgents(ns: NS, cache: CacheEntry[]): CacheEntry[] {
     return cache.filter((x) => x.isAgent && GetOpenRAM(ns, x, true) >= 1.7);
 }
 
+export function GetCoreTable(ns: NS, cache: CacheEntry[]): Set<number> {
+    var agents = GetAgents(ns, cache);
+    agents.sort((a, b) => b.cpuCores - a.cpuCores);
+    const cpuSet = new Set<number>();
+    for (const agent of agents) {
+        cpuSet.add(agent.cpuCores);
+    }
+    for (var item of cpuSet) {
+        ns.tprintRaw(`${item}`);
+    }
+    return cpuSet;
+}
+
 /**
  * Get the cache entries that are victims, optionally restricted to those without an active target.
  * @param ns - Netscript namespace.
@@ -191,6 +204,31 @@ export function RefreshCache(ns: NS): void {
     }
 }
 
+export class DPSEntry {
+    part: number;
+    threads: number;
+    stolen: number;
+    dps: number;
+    constructor(ns: NS, public victim: CacheEntry, public percent: number) {
+        this.part = ns.hackAnalyze(victim.hostname);
+        this.threads = Math.ceil((percent / 100) / this.part);
+        this.stolen = ns.getServerMaxMoney(victim.hostname) * (this.part * this.threads);
+        this.dps = this.stolen / (ns.getWeakenTime(victim.hostname) / 1000);
+    }
+}
+
+export function GetBestDPS(ns: NS, cache: CacheEntry[]): DPSEntry | undefined {
+    const victims = GetVictims(ns, cache, false).filter((x) => GetVictimState(ns, x) === VictimState.PREPPED);
+    const entries = new Array<DPSEntry>();
+    for (var i = 1; i <= 20; i++) {
+        for (const victim of victims) {
+            entries.push(new DPSEntry(ns, victim, i));
+        }
+    }
+    const best = entries.sort((a, b) => (b.dps - a.dps))[0];
+    return best;
+}
+
 /**
  * Open every port on a server for which the player has the matching cracking program.
  * @remarks
@@ -249,6 +287,14 @@ export function GetOpenRAM(ns: NS, entry: CacheEntry, reserveIfHome: boolean = f
     let used = ns.getServerUsedRam(entry.hostname);
     if (reserveIfHome && entry.hostname === "home") used += 32;
     return ns.getServerMaxRam(entry.hostname) - used;
+}
+
+export function GetAllOpenRAM(ns: NS, agents: CacheEntry[]): number {
+    var total = 0;
+    for (var agent of agents) {
+        total += GetOpenRAM(ns, agent, true);
+    }
+    return total;
 }
 
 /**

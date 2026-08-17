@@ -1,8 +1,8 @@
-import {NS, BasicHGWOptions} from "@ns";
-import { GetSecDiff, GetMoneyDiff, GetGrowthRequiredMultiplier, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, TotalRAM, WeakenTable } from "./cacher";
+import {NS, BasicHGWOptions } from "@ns";
+import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM } from "./cacher";
 import { SCRIPTS } from "../config";
 
-export class GrowTask {
+export class HGWTask {
     targetThreads: number = -1;
     possibleThreads: number = -1;
     actualThreads: number = -1;
@@ -10,70 +10,53 @@ export class GrowTask {
     secDiff: number = -1;
     ram: number = -1;
     time: number = -1;
-    constructor(ns: NS, public agent: CacheEntry, victim: CacheEntry, public mult: number = -1, public reserved: number = 0) {
-        if (mult === -1) mult = ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
-        this.time = ns.getGrowTime(victim.hostname);
-        this.targetThreads = Math.ceil(ns.growthAnalyze(agent.hostname, mult, agent.cpuCores));
-        this.possibleThreads = Math.floor((GetOpenRAM(ns, agent, true) - reserved) / ns.getScriptRam(SCRIPTS.grow, agent.hostname));
+    constructor(public script: string, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {}
+
+    setThreadInfo(ns: NS) {
+        this.possibleThreads = Math.floor((GetOpenRAM(ns, this.agent, true) - this.reserved) / ns.getScriptRam(this.script, this.agent.hostname));
         this.threadDelta = this.targetThreads - this.possibleThreads;
         if (this.threadDelta > 0) {
             this.actualThreads = this.possibleThreads;
         } else {
             this.actualThreads = this.targetThreads;
         }
-        this.secDiff = ns.growthAnalyzeSecurity(this.actualThreads, "", agent.cpuCores);
-        this.ram = ns.getScriptRam(SCRIPTS.grow, agent.hostname) * this.actualThreads;
+        this.ram = ns.getScriptRam(this.script, this.agent.hostname) * this.actualThreads;
     }
 }
 
-export class WeakenTask {
-    targetThreads: number = -1;
-    possibleThreads: number = -1;
-    actualThreads: number = -1;
-    threadDelta: number = -1;
-    secDiff: number = -1;
-    ram: number = -1;
-    time: number = -1;
-    constructor(ns: NS, public agent: CacheEntry, victim: CacheEntry, public diff: number | undefined = undefined, public reserved: number = 0) {
-        if (diff === undefined) diff = ns.getServerSecurityLevel(victim.hostname) - ns.getServerMinSecurityLevel(victim.hostname);
+export class GrowTask extends HGWTask {
+    constructor(ns: NS, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {
+        super(SCRIPTS.grow, agent, victim, reserved, HGWMod);
+        if (HGWMod === -1) HGWMod = ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
+        this.time = ns.getGrowTime(victim.hostname);
+        this.targetThreads = Math.ceil(ns.growthAnalyze(agent.hostname, HGWMod, agent.cpuCores));
+        this.setThreadInfo(ns);
+        this.secDiff = ns.growthAnalyzeSecurity(this.actualThreads, undefined, agent.cpuCores);
+    }
+}
+
+export class WeakenTask extends HGWTask {
+    constructor(ns: NS, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {
+        super(SCRIPTS.weaken, agent, victim, reserved, HGWMod);
+        if (HGWMod === undefined) HGWMod = ns.getServerSecurityLevel(victim.hostname) - ns.getServerMinSecurityLevel(victim.hostname);
         this.time = ns.getWeakenTime(victim.hostname);
-        this.targetThreads = Math.ceil(diff / (agent.weakenMult ?? 0));
-        this.possibleThreads = Math.floor((GetOpenRAM(ns, agent, true) - reserved) / ns.getScriptRam(SCRIPTS.weaken, agent.hostname));
-        this.threadDelta = this.targetThreads - this.actualThreads;
-        if (this.threadDelta > 0) {
-            this.actualThreads = this.possibleThreads;
-        } else {
-            this.actualThreads = this.targetThreads;
-        }
+        this.targetThreads = Math.ceil(HGWMod / (agent.weakenMult ?? 0));
+        this.setThreadInfo(ns);
         this.secDiff = ns.weakenAnalyze(this.actualThreads, agent.cpuCores);
-        this.ram = ns.getScriptRam(SCRIPTS.weaken, agent.hostname) * this.actualThreads;
     }
 }
 
-export class HackTask {
-    targetThreads: number = -1;
-    possibleThreads: number = -1;
-    actualThreads: number = -1;
-    threadDelta: number = -1;
-    secDiff: number = -1;
-    ram: number = -1;
-    time: number = -1;
-    constructor(ns: NS, public agent: CacheEntry, victim: CacheEntry, public percent: number = 25, public reserved: number = 0) {
-        this.targetThreads = Math.ceil((percent / 100) / ns.hackAnalyze(victim.hostname));
-        this.possibleThreads = Math.floor((GetOpenRAM(ns, agent, true) - reserved) / ns.getScriptRam(SCRIPTS.hack, agent.hostname));
+export class HackTask extends HGWTask {
+    constructor(ns: NS, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {
+        super(SCRIPTS.hack, agent, victim, reserved, HGWMod);
+        this.targetThreads = Math.ceil((HGWMod / 100) / ns.hackAnalyze(victim.hostname));
         this.time = ns.getHackTime(victim.hostname);
-        this.threadDelta = this.targetThreads - this.actualThreads;
-        if (this.threadDelta > 0) {
-            this.actualThreads = this.possibleThreads;
-        } else {
-            this.actualThreads = this.targetThreads;
-        }
+        this.setThreadInfo(ns);
         this.secDiff = ns.hackAnalyzeSecurity(this.actualThreads);
-        this.ram = ns.getScriptRam(SCRIPTS.hack, agent.hostname) * this.actualThreads;
     }
 }
 
-export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry): Array<number> | undefined {
+export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry, percent: number = 10): Array<number> | undefined {
     var agents = GetAgents(ns, cache);
     if (agents.length === 0) return undefined;
     agents.sort((a, b) => ((b.cpuCores) - (a.cpuCores)));
@@ -85,7 +68,7 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry)
     const accumulatedRAM = new Map<string, number>();
 
     for (const agent of agents) {
-        const task = new HackTask(ns, agent, victim, 10);
+        const task = new HackTask(ns, agent, victim, undefined, percent);
         if (task.threadDelta < 0) {
             hackTaskWinner = task;
             break;
@@ -101,7 +84,7 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry)
     accumulatedRAM.set(hackTaskWinner.agent.hostname, hackTaskWinner.ram);
 
     for (const agent of agents) {
-        const task = new WeakenTask(ns, agent, victim, hackTaskWinner.secDiff, accumulatedRAM.get(agent.hostname));
+        const task = new WeakenTask(ns, agent, victim, accumulatedRAM.get(agent.hostname), hackTaskWinner.secDiff);
         if (task.threadDelta < 0) {
             firstWeakenTaskWinner = task;
             break;
@@ -117,7 +100,7 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry)
     accumulatedRAM.set(firstWeakenTaskWinner.agent.hostname, (accumulatedRAM.get(firstWeakenTaskWinner.agent.hostname) ?? 0) + firstWeakenTaskWinner.ram);
 
     for (const agent of agents) {
-        const task = new GrowTask(ns, agent, victim, 1.1, accumulatedRAM.get(agent.hostname));
+        const task = new GrowTask(ns, agent, victim, accumulatedRAM.get(agent.hostname), 100 / (100 - percent));
         if (task.threadDelta < 0) {
             growTaskWinner = task;
             break;
@@ -133,7 +116,7 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry)
     accumulatedRAM.set(growTaskWinner.agent.hostname, (accumulatedRAM.get(growTaskWinner.agent.hostname) ?? 0) + growTaskWinner.ram);
 
     for (const agent of agents) {
-        const task = new WeakenTask(ns, agent, victim, growTaskWinner.secDiff, accumulatedRAM.get(agent.hostname));
+        const task = new WeakenTask(ns, agent, victim, accumulatedRAM.get(agent.hostname), growTaskWinner.secDiff);
         if (task.threadDelta < 0) {
             secondWeakenTaskWinner = task;
             break;
@@ -159,6 +142,11 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry)
 
     if (pids.includes(0)) {
         for (const pid of pids) {
+            if (pid === 0) continue;
+            const prog = ns.getRunningScript(pid);
+            if (prog !== null) {
+                ns.tprint(`ERROR Killing script ${prog.filename} with pid ${pid}`);
+            }
             ns.kill(pid);
         }
         return undefined;
@@ -191,7 +179,7 @@ export function AssignGWJob(ns: NS, cache: CacheEntry[], victim: CacheEntry): Ar
     }
 
     for (const agent of agents) {
-        const task = new WeakenTask(ns, agent, victim, growTaskWinner.secDiff);
+        const task = new WeakenTask(ns, agent, victim, undefined, growTaskWinner.secDiff);
         if (task.threadDelta < 0) {
             if (task.agent.hostname !== growTaskWinner.agent.hostname) {
                 weakenTaskWinner = task;
@@ -284,14 +272,20 @@ export function TrySetup(ns: NS): any | undefined {
         return undefined;
     }
 
-    const victims = GetVictims(ns, servers, true);
+    const idleVictims = GetVictims(ns, servers, true);
+    const allVictims = GetVictims(ns, servers, false);
 
-    if (victims.length <= 0) {
+    if (idleVictims.length <= 0) {
+        ns.tprintRaw(`[WARN] No idle victims found in server cache!`);
+        return undefined;
+    }
+
+    if (allVictims.length <= 0) {
         ns.tprintRaw(`[WARN] No victims found in server cache!`);
         return undefined;
     }
 
-    return { agents: agents, victims: victims };
+    return { agents: agents, idleVictims: idleVictims, allVictims: allVictims };
 }
 
 export async function main(ns: NS) {
@@ -301,11 +295,11 @@ export async function main(ns: NS) {
             await ns.sleep(5000);
             continue;
         }
-        data.victims.sort((a: CacheEntry, b: CacheEntry) => ns.getServerRequiredHackingLevel(a.hostname) - ns.getServerRequiredHackingLevel(b.hostname));
-        if (data.victims.length > 10) {
-            data.victims.filter((x: CacheEntry) => ns.getServerGrowth(x.hostname) > 30);
+        data.idleVictims.sort((a: CacheEntry, b: CacheEntry) => ns.getServerRequiredHackingLevel(a.hostname) - ns.getServerRequiredHackingLevel(b.hostname));
+        if (data.idleVictims.length > 10) {
+            data.idleVictims.filter((x: CacheEntry) => ns.getServerGrowth(x.hostname) > 30);
         }
-        for (const victim of data.victims) {
+        for (const victim of data.idleVictims) {
             const diff = GetSecDiff(ns, victim);
             if (diff > 0 && ns.getWeakenTime(victim.hostname) <= 60 * 60 * 1000) {
                 AssignBestWeakenAgent(ns, data.agents, victim, diff);
@@ -316,7 +310,13 @@ export async function main(ns: NS) {
 				AssignGWJob(ns, data.agents, victim);
                 continue;
 			}
-            AssignFullBatch(ns, data.agents, victim);
+        }
+        const best = GetBestDPS(ns, data.allVictims);
+        if (best === undefined) continue;;
+        let success: number[] | undefined = [];
+        while (success !== undefined) {
+            success = AssignFullBatch(ns, data.agents, best.victim, 10);
+            await ns.sleep(10);
         }
         await ns.sleep(5000);
     }
