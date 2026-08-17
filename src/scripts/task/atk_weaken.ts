@@ -6,8 +6,8 @@ export async function main(ns: NS) {
   const padms = ns.args[1] as number;
   const start = performance.now();
   RegisterTarget(ns, target);
-  await ns.weaken(target, { additionalMsec: padms });
+  const result = await ns.weaken(target, { additionalMsec: padms });
   const end = performance.now();
-  // ns.tprintRaw(`Weaken vs. ${target} finished: ${end - start}ms ${(end - start) / 1000}s`);
+  // ns.tprintRaw(`Weaken vs. ${target} finished: ${end - start}ms ${(end - start) / 1000}s (Result: ${result})`);
   UnregisterTarget(ns, target);
 }

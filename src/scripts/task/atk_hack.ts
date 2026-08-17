@@ -6,8 +6,8 @@ export async function main(ns: NS) {
   const padms = ns.args[1] as number;
   RegisterTarget(ns, target);
   const start = performance.now();
-  await ns.hack(target, { additionalMsec: padms });
+  const result = await ns.hack(target, { additionalMsec: padms });
   const end = performance.now();
-  // ns.tprintRaw(`Hack vs. ${target} finished: ${end - start}ms ${(end - start) / 1000}s`);
+  // ns.tprintRaw(`Hack vs. ${target} finished: ${end - start}ms ${(end - start) / 1000}s (Result: ${result})`);
   UnregisterTarget(ns, target);
 }
