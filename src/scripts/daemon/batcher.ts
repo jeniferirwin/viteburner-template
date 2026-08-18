@@ -314,7 +314,7 @@ export async function main(ns: NS) {
         const best = GetBestDPS(ns, data.allVictims);
         if (best === undefined) continue;;
         let success: number[] | undefined = [];
-        while (success !== undefined) {
+        while (success !== undefined && best.victim.hostname === (GetBestDPS(ns, data.allVictims)?.victim.hostname ?? "none")) {
             success = AssignFullBatch(ns, data.agents, best.victim, 10);
             await ns.sleep(10);
         }
