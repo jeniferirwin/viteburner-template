@@ -1,5 +1,5 @@
 import {NS, BasicHGWOptions } from "@ns";
-import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM } from "./cacher";
+import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM, GetAllMaxRAM, RegisterTarget } from "./cacher";
 import { SCRIPTS } from "../config";
 
 export class HGWTask {
@@ -268,24 +268,19 @@ export function TrySetup(ns: NS): any | undefined {
 
     const agents = GetAgents(ns, servers);
     if (agents.length <= 0) {
-        ns.tprintRaw(`[WARN] No agents found in server cache!`);
         return undefined;
     }
 
-    const idleVictims = GetVictims(ns, servers, true);
     const allVictims = GetVictims(ns, servers, false);
-
-    if (idleVictims.length <= 0) {
-        ns.tprintRaw(`[WARN] No idle victims found in server cache!`);
-        return undefined;
-    }
+    const best = GetBestDPS(ns, allVictims);
+    if (best !== undefined) RegisterTarget(ns, best.victim.hostname);
+    const idleVictims = GetVictims(ns, servers, true);
 
     if (allVictims.length <= 0) {
-        ns.tprintRaw(`[WARN] No victims found in server cache!`);
         return undefined;
     }
 
-    return { agents: agents, idleVictims: idleVictims, allVictims: allVictims };
+    return { agents: agents, idleVictims: idleVictims, allVictims: allVictims, best: best };
 }
 
 export async function main(ns: NS) {
@@ -294,6 +289,15 @@ export async function main(ns: NS) {
         if (data === undefined) {
             await ns.sleep(5000);
             continue;
+        }
+        if (data.best !== undefined) {
+            let success: number[] | undefined = [];
+            var usedRAM = GetAllMaxRAM(ns, data.agents) - GetAllOpenRAM(ns, data.agents);
+            while (success !== undefined && data.best.victim.hostname === (GetBestDPS(ns, data.allVictims)?.victim.hostname ?? "none") && usedRAM < GetAllMaxRAM(ns, data.agents) * .75) {
+                success = AssignFullBatch(ns, data.agents, data.best.victim, 10);
+                usedRAM = GetAllMaxRAM(ns, data.agents) - GetAllOpenRAM(ns, data.agents);
+                await ns.sleep(10);
+            }
         }
         data.idleVictims.sort((a: CacheEntry, b: CacheEntry) => ns.getServerRequiredHackingLevel(a.hostname) - ns.getServerRequiredHackingLevel(b.hostname));
         if (data.idleVictims.length > 10) {
@@ -310,13 +314,6 @@ export async function main(ns: NS) {
 				AssignGWJob(ns, data.agents, victim);
                 continue;
 			}
-        }
-        const best = GetBestDPS(ns, data.allVictims);
-        if (best === undefined) continue;;
-        let success: number[] | undefined = [];
-        while (success !== undefined && best.victim.hostname === (GetBestDPS(ns, data.allVictims)?.victim.hostname ?? "none")) {
-            success = AssignFullBatch(ns, data.agents, best.victim, 10);
-            await ns.sleep(10);
         }
         await ns.sleep(5000);
     }

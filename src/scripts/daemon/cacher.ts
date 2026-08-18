@@ -297,6 +297,14 @@ export function GetAllOpenRAM(ns: NS, agents: CacheEntry[]): number {
     return total;
 }
 
+export function GetAllMaxRAM(ns: NS, agents: CacheEntry[]): number {
+    var total = 0;
+    for (var agent of agents) {
+        total += ns.getServerMaxRam(agent.hostname);
+    }
+    return total;
+}
+
 /**
  * Get how far a victim server's security level is above its minimum.
  * @remarks
