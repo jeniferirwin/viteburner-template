@@ -17,6 +17,13 @@ export enum VictimState {
 }
 
 /**
+ * Weaken multiplier per CPU core, indexed by `cpuCores`.
+ * @remarks
+ * Entry 0 is unused (no server has 0 cores). Values increase linearly from 0.05 per core beyond the first.
+ */
+export const WeakenTable: number[] = [0, ...Array.from({ length: 199 }, (_, i) => 0.05 * (1 + i / 16))];
+
+/**
  * Snapshot of a server's static and derived properties, used to decide whether it should be
  * treated as an agent (RAM provider), a victim (hacking target), or both.
  */
@@ -52,11 +59,79 @@ export class CacheEntry {
 }
 
 /**
- * Weaken multiplier per CPU core, indexed by `cpuCores`.
+ * Projected return from hacking a victim server for a given percentage of its max money per cycle.
  * @remarks
- * Entry 0 is unused (no server has 0 cores). Values increase linearly from 0.05 per core beyond the first.
+ * A "cycle" is taken to be one weaken time, since weaken is the slowest of the three HGW operations
+ * and therefore bounds how often the victim can be hacked again.
  */
-export const WeakenTable: number[] = [0, ...Array.from({ length: 199 }, (_, i) => 0.05 * (1 + i / 16))];
+export class DPSEntry {
+    /** Fraction of the victim's money stolen by a single hack thread. */
+    part: number;
+    /** Hack threads required to steal `percent`% of the victim's max money. */
+    threads: number;
+    /** Money stolen per cycle at `threads` hack threads. */
+    stolen: number;
+    /** Money stolen per second, using the victim's weaken time as the cycle length. */
+    dps: number;
+
+    /**
+     * @param ns - Netscript namespace.
+     * @param victim - Cache entry for the target server.
+     * @param percent - Target percentage of the victim's max money to steal per cycle.
+     */
+    constructor(ns: NS, public victim: CacheEntry, public percent: number) {
+        this.part = ns.hackAnalyze(victim.hostname);
+        this.threads = Math.ceil((percent / 100) / this.part);
+        this.stolen = ns.getServerMaxMoney(victim.hostname) * (this.part * this.threads);
+        this.dps = this.stolen / (ns.getWeakenTime(victim.hostname) / 1000);
+    }
+}
+
+/**
+ * Read the server cache from the cache port.
+ * @param ns - Netscript namespace.
+ * @returns The cached entries, or undefined if the port has never been written to.
+ */
+export function GetCache(ns: NS): CacheEntry[] | undefined {
+    const entries = ns.peek(CACHE_PORT);
+    if (typeof entries === "string") return undefined;
+    return entries;
+}
+
+/**
+ * Find a cache entry by hostname.
+ * @param ns - Netscript namespace.
+ * @param hostname - Hostname to look up.
+ * @returns The matching cache entry, or undefined if the cache is unavailable or has no match.
+ */
+export function GetCacheEntry(ns: NS, hostname: string): CacheEntry | undefined {
+    const entries = GetCache(ns);
+    if (entries === undefined) return undefined;
+    return entries.find((entry) => entry.hostname === hostname);
+}
+
+/**
+ * Rebuild the server cache from scratch and write it to the cache port.
+ * @remarks
+ * Scans every known server, builds a CacheEntry for each, discards entries that are neither
+ * agents nor victims, copies the scripts bundle to surviving agents, and rewrites the cache port.
+ * Logs a warning if the port write fails.
+ * @param ns - Netscript namespace.
+ */
+export function RefreshCache(ns: NS): void {
+    const entries: CacheEntry[] = [];
+    ns.clearPort(CACHE_PORT);
+    const servers = GetAllServerNames(ns);
+    for (const server of servers) {
+        const entry = new CacheEntry(ns, ns.getServer(server));
+        if (!entry.isAgent && !entry.isVictim) continue;
+        PutBundle(ns, entry);
+        entries.push(entry);
+    }
+    if (!ns.tryWritePort(CACHE_PORT, entries)) {
+        ns.tprintRaw(`[WARN] CacheDB failed to update server list!`);
+    }
+}
 
 /**
  * Read the set of currently targeted victim hostnames from the target port.
@@ -130,6 +205,15 @@ export function GetAgents(ns: NS, cache: CacheEntry[]): CacheEntry[] {
     return cache.filter((x) => x.isAgent && GetOpenRAM(ns, x, true) >= 1.7);
 }
 
+/**
+ * Print and return the set of distinct CPU core counts among agent servers.
+ * @remarks
+ * Diagnostic helper: prints each distinct core count to the terminal via `ns.tprintRaw` as a
+ * side effect, in addition to returning the set.
+ * @param ns - Netscript namespace.
+ * @param cache - Cache entries to inspect.
+ * @returns Set of distinct `cpuCores` values found among agents.
+ */
 export function GetCoreTable(ns: NS, cache: CacheEntry[]): Set<number> {
     var agents = GetAgents(ns, cache);
     agents.sort((a, b) => b.cpuCores - a.cpuCores);
@@ -159,105 +243,17 @@ export function GetVictims(ns: NS, cache: CacheEntry[], onlyIdle: boolean): Cach
 }
 
 /**
- * Find a cache entry by hostname.
- * @param ns - Netscript namespace.
- * @param hostname - Hostname to look up.
- * @returns The matching cache entry, or undefined if the cache is unavailable or has no match.
- */
-export function GetCacheEntry(ns: NS, hostname: string): CacheEntry | undefined {
-    const entries = GetCache(ns);
-    if (entries === undefined) return undefined;
-    return entries.find((entry) => entry.hostname === hostname);
-}
-
-/**
- * Read the server cache from the cache port.
- * @param ns - Netscript namespace.
- * @returns The cached entries, or undefined if the port has never been written to.
- */
-export function GetCache(ns: NS): CacheEntry[] | undefined {
-    const entries = ns.peek(CACHE_PORT);
-    if (typeof entries === "string") return undefined;
-    return entries;
-}
-
-/**
- * Rebuild the server cache from scratch and write it to the cache port.
+ * Get how far a victim server's security level is above its minimum.
  * @remarks
- * Scans every known server, builds a CacheEntry for each, discards entries that are neither
- * agents nor victims, copies the scripts bundle to surviving agents, and rewrites the cache port.
- * Logs a warning if the port write fails.
- * @param ns - Netscript namespace.
- */
-export function RefreshCache(ns: NS): void {
-    const entries: CacheEntry[] = [];
-    ns.clearPort(CACHE_PORT);
-    const servers = GetAllServerNames(ns);
-    for (const server of servers) {
-        const entry = new CacheEntry(ns, ns.getServer(server));
-        if (!entry.isAgent && !entry.isVictim) continue;
-        PutBundle(ns, entry);
-        entries.push(entry);
-    }
-    if (!ns.tryWritePort(CACHE_PORT, entries)) {
-        ns.tprintRaw(`[WARN] CacheDB failed to update server list!`);
-    }
-}
-
-export class DPSEntry {
-    part: number;
-    threads: number;
-    stolen: number;
-    dps: number;
-    constructor(ns: NS, public victim: CacheEntry, public percent: number) {
-        this.part = ns.hackAnalyze(victim.hostname);
-        this.threads = Math.ceil((percent / 100) / this.part);
-        this.stolen = ns.getServerMaxMoney(victim.hostname) * (this.part * this.threads);
-        this.dps = this.stolen / (ns.getWeakenTime(victim.hostname) / 1000);
-    }
-}
-
-export function GetBestDPS(ns: NS, cache: CacheEntry[]): DPSEntry | undefined {
-    const victims = GetVictims(ns, cache, false).filter((x) => GetVictimState(ns, x) === VictimState.PREPPED);
-    const entries = new Array<DPSEntry>();
-    for (var i = 1; i <= 20; i++) {
-        for (const victim of victims) {
-            entries.push(new DPSEntry(ns, victim, i));
-        }
-    }
-    const best = entries.sort((a, b) => (b.dps - a.dps))[0];
-    return best;
-}
-
-/**
- * Open every port on a server for which the player has the matching cracking program.
- * @remarks
- * Runs BruteSSH.exe, FTPCrack.exe, HTTPWorm.exe, RelaySMTP.exe, and SQLInject.exe against the target
- * server for each program that exists on home, regardless of whether the port is already open.
+ * Returns the difference between the server's current security level and its minimum
+ * security level. Servers that are not marked as victims report -1.
  * @param ns - Netscript namespace.
  * @param entry - Cache entry for the target server.
+ * @returns Security level above the minimum, or -1 if the server is not a victim.
  */
-export function CrackPorts(ns: NS, entry: CacheEntry): void {
-    if (ns.fileExists("BruteSSH.exe", "home")) ns.brutessh(entry.hostname);
-    if (ns.fileExists("FTPCrack.exe", "home")) ns.ftpcrack(entry.hostname);
-    if (ns.fileExists("HTTPWorm.exe", "home")) ns.httpworm(entry.hostname);
-    if (ns.fileExists("RelaySMTP.exe", "home")) ns.relaysmtp(entry.hostname);
-    if (ns.fileExists("SQLInject.exe", "home")) ns.sqlinject(entry.hostname);
-}
-
-/**
- * Get the factor a victim server's money must be multiplied by to reach its maximum.
- * @remarks
- * Returns the ratio of the server's maximum money to its currently available money, suitable for
- * passing to ns.growthAnalyze. A fully grown server reports 1, and a server drained to no money
- * reports Infinity.
- * @param ns - Netscript namespace.
- * @param victim - Cache entry for the target server.
- * @returns Growth multiplier needed to restore the server to maximum money, or 0 if the server is not a victim.
- */
-export function GetGrowthRequiredMultiplier(ns: NS, victim: CacheEntry): number {
-    if (!victim.isVictim) return 0;
-    return ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
+export function GetSecDiff(ns: NS, entry: CacheEntry): number {
+    if (!entry.isVictim) return -1;
+    return ns.getServerSecurityLevel(entry.hostname) - ns.getServerMinSecurityLevel(entry.hostname);
 }
 
 /**
@@ -274,49 +270,18 @@ export function GetMoneyDiff(ns: NS, entry: CacheEntry): number {
 }
 
 /**
- * Get the amount of unused RAM available on an agent server.
+ * Get the factor a victim server's money must be multiplied by to reach its maximum.
  * @remarks
- * Servers that are not marked as agents are treated as having no usable RAM.
+ * Returns the ratio of the server's maximum money to its currently available money, suitable for
+ * passing to ns.growthAnalyze. A fully grown server reports 1, and a server drained to no money
+ * reports Infinity.
  * @param ns - Netscript namespace.
- * @param entry - Cache entry for the target server.
- * @param reserveIfHome - If true, reserve 32GB of RAM when the entry is the home server.
- * @returns Free RAM (in GB) on the server, or 0 if the server is not an agent.
+ * @param victim - Cache entry for the target server.
+ * @returns Growth multiplier needed to restore the server to maximum money, or 0 if the server is not a victim.
  */
-export function GetOpenRAM(ns: NS, entry: CacheEntry, reserveIfHome: boolean = false): number {
-    if (entry.isAgent === false) return 0;
-    let used = ns.getServerUsedRam(entry.hostname);
-    if (reserveIfHome && entry.hostname === "home") used += 32;
-    return ns.getServerMaxRam(entry.hostname) - used;
-}
-
-export function GetAllOpenRAM(ns: NS, agents: CacheEntry[]): number {
-    var total = 0;
-    for (var agent of agents) {
-        total += GetOpenRAM(ns, agent, true);
-    }
-    return total;
-}
-
-export function GetAllMaxRAM(ns: NS, agents: CacheEntry[]): number {
-    var total = 0;
-    for (var agent of agents) {
-        total += ns.getServerMaxRam(agent.hostname);
-    }
-    return total;
-}
-
-/**
- * Get how far a victim server's security level is above its minimum.
- * @remarks
- * Returns the difference between the server's current security level and its minimum
- * security level. Servers that are not marked as victims report -1.
- * @param ns - Netscript namespace.
- * @param entry - Cache entry for the target server.
- * @returns Security level above the minimum, or -1 if the server is not a victim.
- */
-export function GetSecDiff(ns: NS, entry: CacheEntry): number {
-    if (!entry.isVictim) return -1;
-    return ns.getServerSecurityLevel(entry.hostname) - ns.getServerMinSecurityLevel(entry.hostname);
+export function GetGrowthRequiredMultiplier(ns: NS, victim: CacheEntry): number {
+    if (!victim.isVictim) return 0;
+    return ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
 }
 
 /**
@@ -337,6 +302,121 @@ export function GetVictimState(ns: NS, entry: CacheEntry): VictimState {
 }
 
 /**
+ * Find the prepped victim with the best projected money-per-second.
+ * @remarks
+ * Restricts the search to victims currently in VictimState.PREPPED, then evaluates each at hack
+ * percentages from 1% to 20% and returns the single best-scoring combination.
+ * @param ns - Netscript namespace.
+ * @param cache - Cache entries to search (typically already filtered to victims).
+ * @returns The best-scoring DPSEntry, or undefined if there are no prepped victims.
+ */
+export function GetBestDPS(ns: NS, cache: CacheEntry[]): DPSEntry | undefined {
+    const victims = GetVictims(ns, cache, false).filter((x) => GetVictimState(ns, x) === VictimState.PREPPED);
+    const entries = new Array<DPSEntry>();
+    for (var i = 1; i <= 20; i++) {
+        for (const victim of victims) {
+            entries.push(new DPSEntry(ns, victim, i));
+        }
+    }
+    const best = entries.sort((a, b) => (b.dps - a.dps))[0];
+    return best;
+}
+
+/**
+ * Get the amount of unused RAM available on an agent server.
+ * @remarks
+ * Servers that are not marked as agents are treated as having no usable RAM.
+ * @param ns - Netscript namespace.
+ * @param entry - Cache entry for the target server.
+ * @param reserveIfHome - If true, reserve 32GB of RAM when the entry is the home server.
+ * @returns Free RAM (in GB) on the server, or 0 if the server is not an agent.
+ */
+export function GetOpenRAM(ns: NS, entry: CacheEntry, reserveIfHome: boolean = false): number {
+    if (entry.isAgent === false) return 0;
+    let used = ns.getServerUsedRam(entry.hostname);
+    if (reserveIfHome && entry.hostname === "home") used += 32;
+    return ns.getServerMaxRam(entry.hostname) - used;
+}
+
+/**
+ * Get the total unused RAM across a set of agent servers.
+ * @remarks
+ * Sums `GetOpenRAM` with `reserveIfHome` enabled for every entry, regardless of whether each
+ * entry is actually marked as an agent.
+ * @param ns - Netscript namespace.
+ * @param agents - Cache entries to sum.
+ * @returns Total free RAM (in GB) across all given servers.
+ */
+export function GetAllOpenRAM(ns: NS, agents: CacheEntry[]): number {
+    var total = 0;
+    for (var agent of agents) {
+        total += GetOpenRAM(ns, agent, true);
+    }
+    return total;
+}
+
+/**
+ * Get the total maximum RAM across a set of agent servers.
+ * @param ns - Netscript namespace.
+ * @param agents - Cache entries to sum.
+ * @returns Total max RAM (in GB) across all given servers.
+ */
+export function GetAllMaxRAM(ns: NS, agents: CacheEntry[]): number {
+    var total = 0;
+    for (var agent of agents) {
+        total += ns.getServerMaxRam(agent.hostname);
+    }
+    return total;
+}
+
+/**
+ * Get how many threads of a script fit in a server's open RAM.
+ * @remarks
+ * Returns 0 if the server is not an agent or the script is not present on the server.
+ * @param ns - Netscript namespace.
+ * @param entry - Cache entry for the target server.
+ * @param script - Path of the script to size against.
+ * @returns Number of threads the server's open RAM can support for the script.
+ */
+export function GetMaxThreads(ns: NS, entry: CacheEntry, script: string): number {
+    if (!entry.isAgent) return 0;
+    if (!ns.fileExists(script, entry.hostname)) return 0;
+    const ram = ns.getScriptRam(script, entry.hostname);
+    return Math.floor(GetOpenRAM(ns, entry) / ram);
+}
+
+/**
+ * Get the total RAM required to run a number of threads of a script, as sized on home.
+ * @remarks
+ * Script RAM cost is always looked up on the home server, regardless of which server the
+ * threads would actually run on.
+ * @param ns - Netscript namespace.
+ * @param script - Path of the script to size.
+ * @param threads - Number of threads to size for.
+ * @returns Total RAM (in GB) required, or -1 if the script does not exist on home.
+ */
+export function TotalRAM(ns: NS, script: string, threads: number): number {
+    if (!ns.fileExists(script, "home")) return -1;
+    return threads * ns.getScriptRam(script, "home");
+}
+
+/**
+ * Open every port on a server for which the player has the matching cracking program.
+ * @remarks
+ * Runs BruteSSH.exe, FTPCrack.exe, HTTPWorm.exe, RelaySMTP.exe, and SQLInject.exe against the target
+ * server for each program that exists on home, regardless of whether the port is already open.
+ * @param ns - Netscript namespace.
+ * @param entry - Cache entry for the target server.
+ */
+export function CrackPorts(ns: NS, entry: CacheEntry): void {
+    if (ns.fileExists("BruteSSH.exe", "home")) ns.brutessh(entry.hostname);
+    if (ns.fileExists("FTPCrack.exe", "home")) ns.ftpcrack(entry.hostname);
+    if (ns.fileExists("HTTPWorm.exe", "home")) ns.httpworm(entry.hostname);
+    if (ns.fileExists("RelaySMTP.exe", "home")) ns.relaysmtp(entry.hostname);
+    if (ns.fileExists("SQLInject.exe", "home")) ns.sqlinject(entry.hostname);
+}
+
+/**
  * Check whether a server has enough open ports to be nuked.
  * @param entry - Cache entry for the target server.
  * @returns True if the server's open port count meets its required port count.
@@ -347,24 +427,11 @@ export function IsNukable(entry: CacheEntry): boolean {
 }
 
 /**
- * Copy the local scripts bundle to an agent server.
- * @remarks
- * Copies every file under /scripts/ on home to the target server.
- * @param ns - Netscript namespace.
- * @param entry - Cache entry for the target server.
- * @returns True if the files were copied successfully, or false if the server is not an agent or the copy failed.
- */
-export function PutBundle(ns: NS, entry: CacheEntry): boolean {
-    if (!entry.isAgent) return false;
-    if (ns.scp(ns.ls("home", "/scripts/"), entry.hostname, "home")) return true;
-    return false;
-}
-
-/**
  * Gain root access to a server, cracking ports and running NUKE.exe as needed.
  * @remarks
- * Does nothing if root access is already held. Otherwise cracks any ports the player has programs
- * for and nukes the server once enough ports are open.
+ * Does nothing if root access is already held. Also does nothing if the server reports an
+ * invalid required-port count (negative, or greater than 5). Otherwise cracks any ports the
+ * player has programs for and nukes the server once enough ports are open.
  * @param ns - Netscript namespace.
  * @param entry - Cache entry for the target server.
  * @returns True if the server has root access after this call, false otherwise.
@@ -404,29 +471,25 @@ export function SetRole(ns: NS, entry: CacheEntry): void {
     if (entry.isAgent) entry.weakenMult = WeakenTable[entry.cpuCores];
 }
 
-export function TotalRAM(ns: NS, script: string, threads: number): number {
-    if (!ns.fileExists(script, "home")) return -1;
-    return threads * ns.getScriptRam(script, "home");
-}
-
 /**
- * Get how many threads of a script fit in a server's open RAM.
+ * Copy the local scripts bundle to an agent server.
  * @remarks
- * Returns 0 if the server is not an agent or the script is not present on the server.
+ * Copies every file under /scripts/ on home to the target server.
  * @param ns - Netscript namespace.
  * @param entry - Cache entry for the target server.
- * @param script - Path of the script to size against.
- * @returns Number of threads the server's open RAM can support for the script.
+ * @returns True if the files were copied successfully, or false if the server is not an agent or the copy failed.
  */
-export function GetMaxThreads(ns: NS, entry: CacheEntry, script: string): number {
-    if (!entry.isAgent) return 0;
-    if (!ns.fileExists(script, entry.hostname)) return 0;
-    const ram = ns.getScriptRam(script, entry.hostname);
-    return Math.floor(GetOpenRAM(ns, entry) / ram);
+export function PutBundle(ns: NS, entry: CacheEntry): boolean {
+    if (!entry.isAgent) return false;
+    if (ns.scp(ns.ls("home", "/scripts/"), entry.hostname, "home")) return true;
+    return false;
 }
 
 /**
- * Continuously refresh the server cache every 10 seconds.
+ * Entry point. Continuously refreshes the server cache every 10 seconds.
+ * @remarks
+ * Exits immediately if another instance of this script is already running on home, so only one
+ * copy ever loops.
  * @param ns - Netscript namespace.
  */
 export async function main(ns: NS): Promise<void> {

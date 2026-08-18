@@ -1,17 +1,46 @@
-import {NS, BasicHGWOptions } from "@ns";
-import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM, GetAllMaxRAM, RegisterTarget } from "./cacher";
+import { NS } from "@ns";
+import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM, GetAllMaxRAM, RegisterTarget, UnregisterTarget } from "./cacher";
 import { SCRIPTS } from "../config";
 
+/**
+ * Base class for a planned hack/grow/weaken task: how many threads of `script` an `agent` could
+ * run against `victim`, sized against the agent's currently available RAM.
+ * @remarks
+ * Subclasses (`HackTask`, `GrowTask`, `WeakenTask`) fill in `targetThreads`, `time`, and `secDiff`
+ * in their constructors, then call `setThreadInfo` to resolve how many threads actually fit.
+ */
 export class HGWTask {
+    /** Threads needed to fully achieve this task's goal (e.g. hack the desired percent). */
     targetThreads: number = -1;
+    /** Threads that fit in the agent's open RAM, ignoring `targetThreads`. */
     possibleThreads: number = -1;
+    /** Threads actually assigned: the smaller of `targetThreads` and `possibleThreads`. */
     actualThreads: number = -1;
+    /** `targetThreads - possibleThreads`. Positive means the agent can't fully cover the target. */
     threadDelta: number = -1;
+    /** Security change this task would cause at `actualThreads`. */
     secDiff: number = -1;
+    /** RAM (in GB) required to run `actualThreads` of `script`. */
     ram: number = -1;
+    /** Time (in ms) this task takes to complete. */
     time: number = -1;
+
+    /**
+     * @param script - Path of the HGW script this task will run.
+     * @param agent - Cache entry for the server the task would run on.
+     * @param victim - Cache entry for the server the task targets.
+     * @param reserved - RAM (in GB) on `agent` to leave unused, e.g. for other tasks already assigned.
+     * @param HGWMod - Task-specific modifier (meaning depends on subclass).
+     */
     constructor(public script: string, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {}
 
+    /**
+     * Resolve `possibleThreads`, `threadDelta`, `actualThreads`, and `ram` from the agent's
+     * currently open RAM and `reserved`.
+     * @remarks
+     * Must be called after `targetThreads` has been set, typically at the end of a subclass constructor.
+     * @param ns - Netscript namespace.
+     */
     setThreadInfo(ns: NS) {
         this.possibleThreads = Math.floor((GetOpenRAM(ns, this.agent, true) - this.reserved) / ns.getScriptRam(this.script, this.agent.hostname));
         this.threadDelta = this.targetThreads - this.possibleThreads;
@@ -24,7 +53,18 @@ export class HGWTask {
     }
 }
 
+/**
+ * A planned grow task. `HGWMod` is the money multiplier the victim needs to reach max money;
+ * if not given (default -1), it is computed from the victim's current money.
+ */
 export class GrowTask extends HGWTask {
+    /**
+     * @param ns - Netscript namespace.
+     * @param agent - Cache entry for the server the task would run on.
+     * @param victim - Cache entry for the server the task targets.
+     * @param reserved - RAM (in GB) on `agent` to leave unused.
+     * @param HGWMod - Money multiplier required to reach max money, or -1 to compute it from the victim's current money.
+     */
     constructor(ns: NS, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {
         super(SCRIPTS.grow, agent, victim, reserved, HGWMod);
         if (HGWMod === -1) HGWMod = ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
@@ -35,7 +75,18 @@ export class GrowTask extends HGWTask {
     }
 }
 
+/**
+ * A planned weaken task. `HGWMod` is the amount of security to remove; if not explicitly passed
+ * as `undefined`, it is computed from the victim's current security level.
+ */
 export class WeakenTask extends HGWTask {
+    /**
+     * @param ns - Netscript namespace.
+     * @param agent - Cache entry for the server the task would run on.
+     * @param victim - Cache entry for the server the task targets.
+     * @param reserved - RAM (in GB) on `agent` to leave unused.
+     * @param HGWMod - Amount of security to remove, or `undefined` to compute it from the victim's current security level above minimum.
+     */
     constructor(ns: NS, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {
         super(SCRIPTS.weaken, agent, victim, reserved, HGWMod);
         if (HGWMod === undefined) HGWMod = ns.getServerSecurityLevel(victim.hostname) - ns.getServerMinSecurityLevel(victim.hostname);
@@ -46,7 +97,17 @@ export class WeakenTask extends HGWTask {
     }
 }
 
+/**
+ * A planned hack task. `HGWMod` is the percentage of the victim's max money to steal.
+ */
 export class HackTask extends HGWTask {
+    /**
+     * @param ns - Netscript namespace.
+     * @param agent - Cache entry for the server the task would run on.
+     * @param victim - Cache entry for the server the task targets.
+     * @param reserved - RAM (in GB) on `agent` to leave unused.
+     * @param HGWMod - Percentage (0-100) of the victim's max money to steal.
+     */
     constructor(ns: NS, public agent: CacheEntry, public victim: CacheEntry, public reserved: number = 0, public HGWMod: number = -1) {
         super(SCRIPTS.hack, agent, victim, reserved, HGWMod);
         this.targetThreads = Math.ceil((HGWMod / 100) / ns.hackAnalyze(victim.hostname));
@@ -56,6 +117,21 @@ export class HackTask extends HGWTask {
     }
 }
 
+/**
+ * Launch a full four-part hack/weaken/grow/weaken batch against a victim.
+ * @remarks
+ * For each stage, picks the agent (sorted by most CPU cores first) whose task first fully covers
+ * the required threads; if none can, falls back to the agent with the smallest thread shortfall.
+ * RAM already committed to earlier stages on the same agent is tracked in `accumulatedRAM` and
+ * reserved when sizing later stages. Tasks are launched with delays so the hack, first weaken,
+ * grow, and second weaken land in that order. If any `ns.exec` call fails (returns pid 0), every
+ * successfully launched task in the batch is killed and the batch is aborted.
+ * @param ns - Netscript namespace.
+ * @param cache - Cache entries to draw agents from.
+ * @param victim - Cache entry for the server to batch against.
+ * @param percent - Percentage of the victim's max money the hack stage should steal. Defaults to 10.
+ * @returns PIDs of the four launched scripts, or undefined if the batch could not be assigned or launched.
+ */
 export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry, percent: number = 10): Array<number> | undefined {
     var agents = GetAgents(ns, cache);
     if (agents.length === 0) return undefined;
@@ -72,7 +148,7 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry,
         if (task.threadDelta < 0) {
             hackTaskWinner = task;
             break;
-        } 
+        }
         if (task.possibleThreads >= 1) hackTasks.push(task);
     }
 
@@ -123,7 +199,7 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry,
         }
         if (task.possibleThreads >= 1) secondWeakenTasks.push(task);
     }
-    
+
     if (secondWeakenTaskWinner === undefined) {
         if (secondWeakenTasks.length < 1) return undefined;
         secondWeakenTaskWinner = secondWeakenTasks.sort((a, b) => a.threadDelta - b.threadDelta)[0];
@@ -154,6 +230,20 @@ export function AssignFullBatch(ns: NS, cache: CacheEntry[], victim: CacheEntry,
     return pids;
 }
 
+/**
+ * Launch a grow+weaken pair against a victim, used to prep it toward max money and min security.
+ * @remarks
+ * Picks the best-fit grow agent first (most CPU cores first, full coverage preferred, else
+ * smallest thread shortfall), then picks a weaken agent the same way. If the only viable weaken
+ * agent is the same server the grow task is running on, it is skipped unless its RAM can cover
+ * both tasks together. The grow task is launched early enough to finish just before the weaken
+ * task. If either `ns.exec` call fails, any successfully launched task is killed and the job is
+ * aborted.
+ * @param ns - Netscript namespace.
+ * @param cache - Cache entries to draw agents from.
+ * @param victim - Cache entry for the server to prep.
+ * @returns PIDs of the two launched scripts, or undefined if the job could not be assigned or launched.
+ */
 export function AssignGWJob(ns: NS, cache: CacheEntry[], victim: CacheEntry): Array<number> | undefined {
     var agents = GetAgents(ns, cache);
     if (agents.length === 0) return undefined;
@@ -207,6 +297,19 @@ export function AssignGWJob(ns: NS, cache: CacheEntry[], victim: CacheEntry): Ar
     return pids;
 }
 
+/**
+ * Spread a weaken job for `diff` security across as many agents as it takes to close the gap.
+ * @remarks
+ * Used as a fallback when no single agent can supply enough weaken threads on its own. Agents are
+ * tried from lowest to highest `weakenMult`, each contributing as many threads as its open RAM
+ * allows, until the security diff is fully covered or agents run out. If any `ns.exec` call fails,
+ * every successfully launched task is killed and the job is aborted.
+ * @param ns - Netscript namespace.
+ * @param cache - Cache entries to draw agents from.
+ * @param victim - Cache entry for the server to weaken.
+ * @param diff - Amount of security to remove.
+ * @returns True if the job was launched successfully, false otherwise.
+ */
 export function DistributeWeakenJob(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
     if (agents.length === 0) return false;
@@ -236,6 +339,19 @@ export function DistributeWeakenJob(ns: NS, cache: CacheEntry[], victim: CacheEn
     return true;
 }
 
+/**
+ * Assign a single agent to weaken a victim by `diff` security, falling back to a distributed job.
+ * @remarks
+ * Tries agents from lowest to highest `weakenMult`, i.e. prefers agents that need the most
+ * threads to close the gap, so as to leave higher-`weakenMult` agents free for other tasks. Picks
+ * the first agent whose open RAM can cover the required thread count. If no single agent can
+ * cover it, falls back to `DistributeWeakenJob`.
+ * @param ns - Netscript namespace.
+ * @param cache - Cache entries to draw agents from.
+ * @param victim - Cache entry for the server to weaken.
+ * @param diff - Amount of security to remove.
+ * @returns True if the job was launched successfully (directly or via the distributed fallback), false otherwise.
+ */
 export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: CacheEntry, diff: number): boolean {
     var agents = cache.filter((x) => x.isAgent && GetOpenRAM(ns, x) >= 1.7);
     if (agents.length === 0) return false;
@@ -255,6 +371,16 @@ export function AssignBestWeakenAgent(ns: NS, cache: CacheEntry[], victim: Cache
     return false;
 }
 
+/**
+ * Gather the state the main loop needs for one iteration: available agents, all victims, idle
+ * victims, and the current best-DPS target.
+ * @remarks
+ * Requires the cacher daemon to be running and its cache to be populated; logs a warning and
+ * returns undefined if either precondition fails, or if there are no usable agents or victims.
+ * Registers the best-DPS victim (if any) as a target as a side effect.
+ * @param ns - Netscript namespace.
+ * @returns An object with `agents`, `idleVictims`, `allVictims`, and `best`, or undefined if setup preconditions aren't met.
+ */
 export function TrySetup(ns: NS): any | undefined {
     if (!ns.isRunning("/scripts/daemon/cacher.js")) {
         ns.tprintRaw(`[WARN] Cacher is not running!`);
@@ -277,12 +403,25 @@ export function TrySetup(ns: NS): any | undefined {
     const idleVictims = GetVictims(ns, servers, true);
 
     if (allVictims.length <= 0) {
+        if (best !== undefined) UnregisterTarget(ns, best.victim.hostname);
         return undefined;
     }
 
     return { agents: agents, idleVictims: idleVictims, allVictims: allVictims, best: best };
 }
 
+/**
+ * Entry point. Repeatedly batches the best-DPS victim while it remains the best target and RAM
+ * usage stays under 75% of total capacity, then assigns prep (weaken/grow) work to other idle
+ * victims that are close enough to being batchable.
+ * @remarks
+ * Idle victims are sorted by required hacking level (easiest first) and, once there are more than
+ * 10 of them, filtered down to those with server growth above 30. For each, a weaken job is
+ * assigned if security is above minimum and weaken time is under an hour, otherwise a grow+weaken
+ * job is assigned if money is below maximum and grow time is under an hour. Sleeps 5 seconds
+ * between iterations when there is nothing to do.
+ * @param ns - Netscript namespace.
+ */
 export async function main(ns: NS) {
     while (true) {
         const data: any = TrySetup(ns);
@@ -307,13 +446,13 @@ export async function main(ns: NS) {
             const diff = GetSecDiff(ns, victim);
             if (diff > 0 && ns.getWeakenTime(victim.hostname) <= 60 * 60 * 1000) {
                 AssignBestWeakenAgent(ns, data.agents, victim, diff);
-				continue;
-            }
-			const moneyDiff = GetMoneyDiff(ns, victim);
-			if (moneyDiff > 0 && ns.getGrowTime(victim.hostname) <= 60 * 60 * 1000) {
-				AssignGWJob(ns, data.agents, victim);
                 continue;
-			}
+            }
+            const moneyDiff = GetMoneyDiff(ns, victim);
+            if (moneyDiff > 0 && ns.getGrowTime(victim.hostname) <= 60 * 60 * 1000) {
+                AssignGWJob(ns, data.agents, victim);
+                continue;
+            }
         }
         await ns.sleep(5000);
     }
