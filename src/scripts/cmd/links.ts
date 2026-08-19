@@ -10,7 +10,7 @@ export async function main(ns: NS) {
         if (server === "w0r1d_d43m0n" || server === "I.I.I.I" || server === "run4theh111z" || server === "The-Cave" || server === "CSEC" || server === "avmnite-02h") {
             for (const host of getChain(ns, server)) {
                 ns.singularity.connect(host);
-                if (host === server)
+                if (host === server && ns.getServerRequiredHackingLevel(server) <= ns.getPlayer().skills.hacking)
                     await ns.singularity.installBackdoor();
             }
         }
