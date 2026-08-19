@@ -232,14 +232,14 @@ export function GetCoreTable(ns: NS, cache: CacheEntry[]): Set<number> {
  * @param ns - Netscript namespace.
  * @param cache - Cache entries to filter.
  * @param onlyIdle - If true, exclude victims that are currently registered as targets.
+ * @param exclusionTime - Exclude victims that would take longer than this time (in seconds) to weaken.
  * @returns Cache entries marked as victims.
  */
-export function GetVictims(ns: NS, cache: CacheEntry[], onlyIdle: boolean): CacheEntry[] {
-    if (onlyIdle) {
-        return cache.filter((x) => x.isVictim && !GetTargets(ns).has(x.hostname));
-    } else {
-        return cache.filter((x) => x.isVictim);
-    }
+export function GetVictims(ns: NS, cache: CacheEntry[], onlyIdle: boolean, exclusionTime: number = Number.POSITIVE_INFINITY): CacheEntry[] {
+    var filtered = cache.filter((x) => x.isVictim);
+    if (onlyIdle) filtered = cache.filter((x) => !GetTargets(ns).has(x.hostname));
+    if (exclusionTime < Number.POSITIVE_INFINITY) filtered = cache.filter((x) => ns.getWeakenTime(x.hostname) <= (exclusionTime * 1000));
+    return filtered;
 }
 
 /**

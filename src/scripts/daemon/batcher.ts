@@ -2,6 +2,8 @@ import { NS } from "@ns";
 import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM, GetAllMaxRAM, RegisterTarget, UnregisterTarget } from "./cacher";
 import { SCRIPTS } from "../config";
 
+export const EXCLUSION_TIME = 120;
+
 /**
  * Base class for a planned hack/grow/weaken task: how many threads of `script` an `agent` could
  * run against `victim`, sized against the agent's currently available RAM.
@@ -397,10 +399,10 @@ export function TrySetup(ns: NS): any | undefined {
         return undefined;
     }
 
-    const allVictims = GetVictims(ns, servers, false);
+    const allVictims = GetVictims(ns, servers, false, EXCLUSION_TIME);
     const best = GetBestDPS(ns, allVictims);
     if (best !== undefined) RegisterTarget(ns, best.victim.hostname);
-    const idleVictims = GetVictims(ns, servers, true);
+    const idleVictims = GetVictims(ns, servers, true, EXCLUSION_TIME);
 
     if (allVictims.length <= 0) {
         if (best !== undefined) UnregisterTarget(ns, best.victim.hostname);
@@ -444,12 +446,12 @@ export async function main(ns: NS) {
         }
         for (const victim of data.idleVictims) {
             const diff = GetSecDiff(ns, victim);
-            if (diff > 0 && ns.getWeakenTime(victim.hostname) <= 5 * 60 * 1000) {
+            if (diff > 0 && ns.getWeakenTime(victim.hostname)) {
                 AssignBestWeakenAgent(ns, data.agents, victim, diff);
                 continue;
             }
             const moneyDiff = GetMoneyDiff(ns, victim);
-            if (moneyDiff > 0 && ns.getGrowTime(victim.hostname) <= 5 * 60 * 1000) {
+            if (moneyDiff > 0 && ns.getGrowTime(victim.hostname)) {
                 AssignGWJob(ns, data.agents, victim);
                 continue;
             }
