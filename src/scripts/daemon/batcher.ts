@@ -444,12 +444,12 @@ export async function main(ns: NS) {
         }
         for (const victim of data.idleVictims) {
             const diff = GetSecDiff(ns, victim);
-            if (diff > 0 && ns.getWeakenTime(victim.hostname) <= 20 * 60 * 1000) {
+            if (diff > 0 && ns.getWeakenTime(victim.hostname) <= 5 * 60 * 1000) {
                 AssignBestWeakenAgent(ns, data.agents, victim, diff);
                 continue;
             }
             const moneyDiff = GetMoneyDiff(ns, victim);
-            if (moneyDiff > 0 && ns.getGrowTime(victim.hostname) <= 20 * 60 * 1000) {
+            if (moneyDiff > 0 && ns.getGrowTime(victim.hostname) <= 5 * 60 * 1000) {
                 AssignGWJob(ns, data.agents, victim);
                 continue;
             }
