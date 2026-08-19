@@ -69,7 +69,7 @@ export class GrowTask extends HGWTask {
         super(SCRIPTS.grow, agent, victim, reserved, HGWMod);
         if (HGWMod === -1) HGWMod = ns.getServerMaxMoney(victim.hostname) / ns.getServerMoneyAvailable(victim.hostname);
         this.time = ns.getGrowTime(victim.hostname);
-        this.targetThreads = Math.ceil(ns.growthAnalyze(agent.hostname, HGWMod, agent.cpuCores));
+        this.targetThreads = Math.ceil(ns.growthAnalyze(victim.hostname, HGWMod, agent.cpuCores));
         this.setThreadInfo(ns);
         this.secDiff = ns.growthAnalyzeSecurity(this.actualThreads, undefined, agent.cpuCores);
     }
@@ -254,7 +254,7 @@ export function AssignGWJob(ns: NS, cache: CacheEntry[], victim: CacheEntry): Ar
     let weakenTaskWinner;
 
     for (const agent of agents) {
-        const task = new GrowTask(ns, agent, victim);
+        const task = new GrowTask(ns, agent, victim, undefined, 1.1);
         if (task.threadDelta < 0) {
             growTaskWinner = task;
             break;
