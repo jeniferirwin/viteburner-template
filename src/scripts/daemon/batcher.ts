@@ -2,7 +2,7 @@ import { NS } from "@ns";
 import { GetSecDiff, GetMoneyDiff, CacheEntry, GetOpenRAM, GetAgents, GetCache, GetVictims, GetBestDPS, GetAllOpenRAM, GetAllMaxRAM, RegisterTarget, UnregisterTarget } from "./cacher";
 import { SCRIPTS } from "../config";
 
-export const EXCLUSION_TIME = 120;
+export const EXCLUSION_TIME = 300;
 
 /**
  * Base class for a planned hack/grow/weaken task: how many threads of `script` an `agent` could
