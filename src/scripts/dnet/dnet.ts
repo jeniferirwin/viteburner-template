@@ -1,6 +1,21 @@
 import {NS, DarknetServerDetails, Darknet} from "@ns";
 import { DNET_SERVER_PORT, DNET_SWEEP_PORT } from "../config";
 
+export async function HandleFactorios(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    let auth;
+    var limit = "";
+    for (var i = 0; i < details.passwordLength; i++) {
+        limit += "9";
+    }
+    for (var j = 0; j <= Number(limit); j++) {
+        auth = await ns.dnet.authenticate(server, String(j));
+        if (auth.success) {
+            ns.tprintRaw(`FactoriOS successful! ${details.passwordLength} - ${j}`);
+            return String(j);
+        }
+    }
+    return undefined;
+}
 
 export async function HandleLaika(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
     let password, auth;
@@ -89,6 +104,9 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
         case "Laika4":
             password = await HandleLaika(ns, server, details);
             break;
+        case "Factori-Os":
+            password = await HandleFactorios(ns, server, details);
+            break;
         default:
             var msg = await ns.dnet.heartbleed(server);
             ns.tprintRaw(`Crack needed for ${server} (model ${details.modelId})`);
@@ -139,21 +157,30 @@ export function WasVisited(ns: NS, server: string): boolean {
     return visited.has(server);
 }
 
-export async function Propagate(ns: NS): Promise<void> {
+export async function Propagate(ns: NS, overwrite: boolean): Promise<void> {
     const servers = ns.dnet.probe();
     for (const server of servers) {
         const details = ns.dnet.getServerDetails(server);
         if (!details.isOnline || WasVisited(ns, server)) continue;
         if (await ModelHandler(ns, server, details)) {
-            ns.scp("scripts/cmd/dnet.js", server);
-            ns.scp("scripts/config.js", server);
-            ns.exec("scripts/cmd/dnet.js", server);
+            if (overwrite) {
+                ns.scp("scripts/dnet/dnet.js", server);
+                ns.scp("scripts/dnet/phishing.js", server);
+                ns.scp("scripts/config.js", server);
+            }
+            if (overwrite) {
+                ns.exec("scripts/dnet/dnet.js", server, { preventDuplicates: true }, "o");
+            } else {
+                ns.exec("scripts/dnet/dnet.js", server, { preventDuplicates: true });
+            }
         }
     }
     return;
 }
 
 export async function main(ns: NS) {
+    const overwrite = ns.args[0] === "o";
+    ns.tprint(overwrite);
     const localhost = ns.getHostname();
     if (localhost === "home") {
         ns.clearPort(DNET_SWEEP_PORT);
@@ -173,5 +200,11 @@ export async function main(ns: NS) {
         ns.dnet.openCache(cache);
     }
     AddVisitedNode(ns, localhost);
-    await Propagate(ns);
+    if (localhost !== "home") {
+        const threads = Math.floor((ns.getServerMaxRam(localhost) - 8) / ns.getScriptRam("scripts/dnet/phishing.js"));
+        if (threads < Number.POSITIVE_INFINITY) {
+            ns.exec("scripts/dnet/phishing.js", localhost, { threads: threads, preventDuplicates: true })
+        }
+    }
+    await Propagate(ns, overwrite);
 }
