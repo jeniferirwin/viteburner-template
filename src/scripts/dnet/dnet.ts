@@ -45,6 +45,7 @@ export async function HandleDeskMemo(ns: NS, server: string, details: DarknetSer
 export async function HandleFreshInstall(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
     let password;
     if (details.passwordLength === 4 && details.passwordFormat === "alphabetic") password = "root";
+    if (details.passwordLength === 4 && details.passwordFormat === "numeric") password = "0000";
     if (details.passwordLength === 5 && details.passwordFormat === "alphabetic") password = "admin";
     if (details.passwordLength === 8) password = "password";
     if (password !== undefined) {
@@ -96,6 +97,9 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
             password = await HandleDeskMemo(ns, server, details);
             break;
         case "FreshInstall_1.0":
+            password = await HandleFreshInstall(ns, server, details);
+            break;
+        case "FreshInstall":
             password = await HandleFreshInstall(ns, server, details);
             break;
         case "CloudBlare(tm)":
@@ -207,4 +211,11 @@ export async function main(ns: NS) {
         }
     }
     await Propagate(ns, overwrite);
+}
+
+export function NILSwitcher(ns: NS, server: string, details: DarknetServerDetails): string {
+    var numbers = Array<number>();
+    numbers.fill(0, 0, 4);
+    var auth = ns.dnet.authenticate(server, numbers.toString())
+    numbers.join("");
 }
