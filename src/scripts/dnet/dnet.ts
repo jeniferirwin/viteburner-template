@@ -1,6 +1,15 @@
 import {NS, DarknetServerDetails, Darknet} from "@ns";
 import { DNET_SERVER_PORT, DNET_SWEEP_PORT } from "../config";
 
+export async function HandleNIL(ns: NS, server: string, details: DarknetServerDetails): Promise<string> {
+    var numbers = Array<number>();
+    numbers.fill(0, 0, 4);
+    var password = numbers.join("");
+    var auth = await ns.dnet.authenticate(server, password);
+	ns.tprintRaw(auth.data);
+	return password;
+}
+
 export async function HandleFactorios(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
     let auth;
     var limit = "";
@@ -111,6 +120,9 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
         case "Factori-Os":
             password = await HandleFactorios(ns, server, details);
             break;
+		case "NIL":
+			password = await HandleNIL(ns, server, details);
+			break;
         default:
             var msg = await ns.dnet.heartbleed(server);
             ns.tprintRaw(`Crack needed for ${server} (model ${details.modelId})`);
@@ -213,9 +225,3 @@ export async function main(ns: NS) {
     await Propagate(ns, overwrite);
 }
 
-export function NILSwitcher(ns: NS, server: string, details: DarknetServerDetails): string {
-    var numbers = Array<number>();
-    numbers.fill(0, 0, 4);
-    var auth = ns.dnet.authenticate(server, numbers.toString())
-    numbers.join("");
-}
