@@ -2,11 +2,12 @@ import {NS, DarknetServerDetails, Darknet} from "@ns";
 import { DNET_SERVER_PORT, DNET_SWEEP_PORT } from "../config";
 
 export async function HandleNIL(ns: NS, server: string, details: DarknetServerDetails): Promise<string> {
-    var numbers = Array<number>();
+    var numbers = new Array<number>();
     numbers.fill(0, 0, 4);
     var password = numbers.join("");
+    ns.tprintRaw(password);
     var auth = await ns.dnet.authenticate(server, password);
-	ns.tprintRaw(auth.data);
+	ns.tprintRaw(`NIL: ${auth.code} ${auth.data ?? ''} ${auth.message} ${auth.success}`);
 	return password;
 }
 
@@ -123,6 +124,9 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
 		case "NIL":
 			password = await HandleNIL(ns, server, details);
 			break;
+        case "OpenWebAccessPoint":
+            password = await HandleOpenWebAccessPoint(ns, server, details);
+            break;
         default:
             var msg = await ns.dnet.heartbleed(server);
             ns.tprintRaw(`Crack needed for ${server} (model ${details.modelId})`);
@@ -195,33 +199,38 @@ export async function Propagate(ns: NS, overwrite: boolean): Promise<void> {
 }
 
 export async function main(ns: NS) {
-    const overwrite = ns.args[0] === "o";
-    ns.tprint(overwrite);
-    const localhost = ns.getHostname();
-    if (localhost === "home") {
-        ns.clearPort(DNET_SWEEP_PORT);
-        const sweep = new Set<string>();
-        sweep.add("home");
-        ns.writePort(DNET_SWEEP_PORT, sweep);
-    }
-    if (!WasVisited(ns, localhost)) {
-        for (const file of ns.ls(localhost)) {
-            if (!file.includes(".js") && !file.includes(".cache")) {
-                ns.tprint(file);
-                ns.scp(file, "home", localhost);
+    while (true) {
+        const overwrite = ns.args[0] === "o";
+        const localhost = ns.getHostname();
+        if (localhost === "home") {
+            ns.clearPort(DNET_SWEEP_PORT);
+            const sweep = new Set<string>();
+            sweep.add("home");
+            ns.writePort(DNET_SWEEP_PORT, sweep);
+        }
+        if (!WasVisited(ns, localhost)) {
+            for (const file of ns.ls(localhost)) {
+                if (!file.includes(".js") && !file.includes(".cache")) {
+                    ns.scp(file, "home", localhost);
+                }
             }
         }
-    }
-    for (const cache of ns.ls(localhost, ".cache")) {
-        ns.dnet.openCache(cache);
-    }
-    AddVisitedNode(ns, localhost);
-    if (localhost !== "home") {
-        const threads = Math.floor((ns.getServerMaxRam(localhost) - 8) / ns.getScriptRam("scripts/dnet/phishing.js"));
-        if (threads < Number.POSITIVE_INFINITY) {
-            ns.exec("scripts/dnet/phishing.js", localhost, { threads: threads, preventDuplicates: true })
+        for (const cache of ns.ls(localhost, ".cache")) {
+            ns.dnet.openCache(cache);
         }
+        AddVisitedNode(ns, localhost);
+        if (localhost !== "home") {
+            const threads = Math.floor((ns.getServerMaxRam(localhost) - 8) / ns.getScriptRam("scripts/dnet/phishing.js"));
+            if (threads < Number.POSITIVE_INFINITY) {
+                ns.exec("scripts/dnet/phishing.js", localhost, { threads: threads, preventDuplicates: true })
+            }
+        }
+        await Propagate(ns, overwrite);
+        if (localhost === "home") {
+            await ns.dnet.nextMutation();
+            continue;
+        }
+        return;
     }
-    await Propagate(ns, overwrite);
 }
 
