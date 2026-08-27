@@ -1,9 +1,32 @@
 import {NS, DarknetServerDetails, Darknet} from "@ns";
 import { DNET_SERVER_PORT, DNET_SWEEP_PORT } from "../config";
 
-export async function HandleNIL(ns: NS, server: string, details: DarknetServerDetails): Promise<string> {
+export async function HandleAccountManager(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    for (var i = 0; i <= 10; i++) {
+        const auth = await ns.dnet.authenticate(server, i.toString());
+        if (auth.success) return i.toString();
+    }
+    return undefined;
+}
+
+export async function HandleOctantVoxel(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    if (details.data.length === 0) return undefined;
+    const base = parseInt(details.data[0]);
+    const number = details.data[1].toString();
+    var result = 0;
+    for (var i = number.length - 1; i >= 0; i--) {
+        result += base ^ parseInt(number[i]);
+    }
+    const password = result.toString();
+    const auth = await ns.dnet.authenticate(server, password);
+    if (auth.success) return password;
+    return undefined;
+}
+
+export async function HandleNIL(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
     var numbers = new Array<number>();
     numbers.fill(0, 0, 4);
+    ns.tprint(numbers);
     var password = numbers.join("");
     ns.tprintRaw(password);
     var auth = await ns.dnet.authenticate(server, password);
@@ -13,11 +36,14 @@ export async function HandleNIL(ns: NS, server: string, details: DarknetServerDe
 
 export async function HandleFactorios(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
     let auth;
-    var limit = "";
+    var upper = "";
+    var lower = "1";
     for (var i = 0; i < details.passwordLength; i++) {
-        limit += "9";
+        upper += "9";
+        if (i > 0) lower += "0";
     }
-    for (var j = 0; j <= Number(limit); j++) {
+    ns.tprintRaw(`upper: ${upper} lower: ${lower}`);
+    for (var j = Number(lower); j <= Number(upper); j++) {
         auth = await ns.dnet.authenticate(server, String(j));
         if (auth.success) {
             ns.tprintRaw(`FactoriOS successful! ${details.passwordLength} - ${j}`);
@@ -126,6 +152,12 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
 			break;
         case "OpenWebAccessPoint":
             password = await HandleOpenWebAccessPoint(ns, server, details);
+            break;
+        case "AccountsManager_4.2":
+            password = await HandleAccountManager(ns, server, details);
+            break;
+        case "OctantVoxel":
+            password = await HandleOctantVoxel(ns, server, details);
             break;
         default:
             var msg = await ns.dnet.heartbleed(server);
