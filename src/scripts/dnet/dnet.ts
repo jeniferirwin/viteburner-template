@@ -1,126 +1,123 @@
-import {NS, DarknetServerDetails, Darknet} from "@ns";
-import { DNET_SERVER_PORT, DNET_SWEEP_PORT } from "../config";
+import {NS, DarknetServerDetails, DarknetResult } from "@ns";
+import { DNET_SERVER_PORT, AUTH_LOCK_PORT } from "../config";
 
-export async function HandleAccountManager(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    for (var i = 0; i <= 10; i++) {
-        const auth = await ns.dnet.authenticate(server, i.toString());
-        if (auth.success) return i.toString();
+export async function main(ns: NS) {
+    while (true) {
+        const overwrite = ns.args[0] === "o";
+        const localhost = ns.getHostname();
+        await Propagate(ns);
+        for (const cache of ns.ls(localhost, ".cache")) ns.dnet.openCache(cache);
+        StartPhishing(ns);
+        await ns.dnet.nextMutation();
+        continue;
     }
+}
+
+export function StartPhishing(ns: NS): boolean {
+    const server = ns.getHostname();
+    const script = "scripts/dnet/phishing.js";
+    if (ns.scriptRunning(script, server)) return true;
+    if (server !== "home") {
+        const threads = Math.floor((ns.getServerMaxRam(server) - 8) / ns.getScriptRam(script));
+        if (threads < Number.POSITIVE_INFINITY) {
+            if (ns.exec(script, server, { threads: threads, preventDuplicates: true })) return true;
+        }
+    }
+    return false;
+}
+
+export function RegisterDnetServer(ns: NS, server: string, password: string): void {
+    var servers: Map<string, string> | string = ns.readPort(DNET_SERVER_PORT);
+    if (typeof(servers) === "string") servers = new Map<string, string>();
+    servers.set(server, password);
+    ns.writePort(DNET_SERVER_PORT, servers);
+    ns.tprintRaw(`Server ${server} registered with password: ${password}`);
+}
+
+export function UnregisterDnetServer(ns: NS, server: string): void {
+    var servers: Map<string, string> | string = ns.readPort(DNET_SERVER_PORT);
+    if (typeof(servers) === "string") servers = new Map<string, string>();
+    servers.delete(server);
+    ns.writePort(DNET_SERVER_PORT, servers);
+}
+
+export function GetPassword(ns: NS, server: string): string | undefined {
+    const servers: Map<string, string> | string = ns.peek(DNET_SERVER_PORT);
+    if (typeof(servers) !== "string") return servers.get(server);
     return undefined;
 }
 
-export async function HandleOctantVoxel(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    if (details.data.length === 0) return undefined;
-    const base = parseInt(details.data[0]);
-    const number = details.data[1].toString();
-    var result = 0;
-    for (var i = number.length - 1; i >= 0; i--) {
-        result += base ^ parseInt(number[i]);
+export async function TryPassword(ns: NS, server: string): Promise<boolean> {
+    if (IsAuthLocked(ns, server) || !SetAuthLock(ns, server)) return false;
+    const password = GetPassword(ns, server);
+    if (password === undefined) {
+        RemoveAuthLock(ns, server);
+        return false;
     }
-    const password = result.toString();
     const auth = await ns.dnet.authenticate(server, password);
-    if (auth.success) return password;
-    return undefined;
+    RemoveAuthLock(ns, server);
+    return auth.success;
 }
 
-export async function HandleNIL(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    var numbers = new Array<number>();
-    numbers.fill(0, 0, 4);
-    ns.tprint(numbers);
-    var password = numbers.join("");
-    ns.tprintRaw(password);
-    var auth = await ns.dnet.authenticate(server, password);
-	ns.tprintRaw(`NIL: ${auth.code} ${auth.data ?? ''} ${auth.message} ${auth.success}`);
-	return password;
+export async function TryModelHandler(ns: NS, server: string): Promise<boolean> {
+    if (IsAuthLocked(ns, server) || !SetAuthLock(ns, server)) return false;
+    const auth = await ModelHandler(ns, server, ns.dnet.getServerDetails(server));
+    RemoveAuthLock(ns, server);
+    return auth;
 }
 
-export async function HandleFactorios(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    let auth;
-    var upper = "";
-    var lower = "1";
-    for (var i = 0; i < details.passwordLength; i++) {
-        upper += "9";
-        if (i > 0) lower += "0";
-    }
-    ns.tprintRaw(`upper: ${upper} lower: ${lower}`);
-    for (var j = Number(lower); j <= Number(upper); j++) {
-        auth = await ns.dnet.authenticate(server, String(j));
-        if (auth.success) {
-            ns.tprintRaw(`FactoriOS successful! ${details.passwordLength} - ${j}`);
-            return String(j);
-        }
-    }
-    return undefined;
+export async function Authorize(ns: NS, server: string): Promise<boolean> {
+    var auth = await TryPassword(ns, server);
+    if (auth === true) return true;
+    return await TryModelHandler(ns, server);
 }
 
-export async function HandleLaika(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    let password, auth;
-    if (details.passwordLength === 3) password = "max";
-    if (details.passwordLength === 5) password = "rover";
-    if (password !== undefined) {
-        auth = await ns.dnet.authenticate(server, password);
-        if (auth.success) return password;
+export async function PutDnetBundle(ns: NS, server: string): Promise<boolean> {
+    if (ns.scriptRunning("scripts/dnet/dnet.js", server)) return false;
+    var files = ns.ls("home", "scripts/dnet/");
+    files.push("scripts/config.js");
+    var arg = "";
+    /* const result = ns.dnet.connectToSession(server, GetPassword(ns, server) ?? "");
+    if (!result.success) {
+        ns.tprintRaw(`Could not transfer to ${server}`);
+        return false;
+    } */
+    for (const file of files) {
+        ns.scp(file, server, ns.getHostname());
     }
-    for (const pw of ["fido", "spot"]) {
-        auth = await ns.dnet.authenticate(server, pw);
-        if (auth.success) return pw;
-    }
-    return undefined;
-}
-export async function HandleDeskMemo(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    const re = new RegExp(/(\d{3,3})/);
-    const match = re.exec(details.passwordHint);
-    if (match !== null) {
-        const password = match[0];
-        const auth = await ns.dnet.authenticate(server, password);
-        if (auth.success) return password;
-    }
-    return undefined;
+    if (ns.exec("scripts/dnet/dnet.js", server, { preventDuplicates: true })) return true;
+    return false;
 }
 
-export async function HandleFreshInstall(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    let password;
-    if (details.passwordLength === 4 && details.passwordFormat === "alphabetic") password = "root";
-    if (details.passwordLength === 4 && details.passwordFormat === "numeric") password = "0000";
-    if (details.passwordLength === 5 && details.passwordFormat === "alphabetic") password = "admin";
-    if (details.passwordLength === 8) password = "password";
-    if (password !== undefined) {
-        var auth = await ns.dnet.authenticate(server, password);
-        if (auth.success) return password;
-    } else {
-        for (const pw of ["12345", "00000"]) {
-            auth = await ns.dnet.authenticate(server, pw);
-            if (auth.success) return pw;
-        }
-    }
-    ns.tprintRaw(`Unknown FreshInstall password on ${server}: ${details.passwordHint} (${details.passwordLength})`);
-    return undefined;
+export function SetAuthLock(ns: NS, server: string): boolean {
+    if (IsAuthLocked(ns, server)) return true;
+    var locks: Set<string> = ns.readPort(AUTH_LOCK_PORT);
+    locks.add(server);
+    return ns.tryWritePort(AUTH_LOCK_PORT, locks);
 }
 
-export async function HandleZeroLogon(ns: NS, server: string): Promise<string | undefined> {
-    const auth = await ns.dnet.authenticate(server, "");
-    if (auth.success) return "";
-    return undefined;
+export function RemoveAuthLock(ns: NS, server: string): boolean {
+    if (!IsAuthLocked(ns, server)) return true;
+    var locks: Set<string> = ns.readPort(AUTH_LOCK_PORT);
+    locks.delete(server);
+    return ns.tryWritePort(AUTH_LOCK_PORT, locks);
 }
 
-export async function HandleOpenWebAccessPoint(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    var auth = await ns.dnet.authenticate(server, "bleed");
-    for (var line of auth.data) {
-        ns.tprintRaw(`OpenWeb: ${line}`);
+export function IsAuthLocked(ns: NS, server: string): boolean {
+    const locks: Set<string> | string = ns.peek(AUTH_LOCK_PORT);
+    if (typeof(locks) === "string") {
+        ns.writePort(AUTH_LOCK_PORT, new Set<string>());
+        return false;
     }
-    return undefined;
+    return locks.has(server);
 }
 
-export async function HandleCloudBlare(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
-    const re = /\d/g;
-    const match = details.data.matchAll(re);
-    if (match !== null) {
-        var password = "";
-        for (const char of match) password += char;
-        const auth = await ns.dnet.authenticate(server, password);
-        if (auth.success) return password;
+export async function Propagate(ns: NS): Promise<void> {
+    const servers = ns.dnet.probe();
+    for (const server of servers) {
+        const auth = await Authorize(ns, server);
+        if (auth === true) PutDnetBundle(ns, server);
     }
-    return undefined;
 }
 
 export async function ModelHandler(ns: NS, server: string, details: DarknetServerDetails): Promise<boolean> {
@@ -159,6 +156,9 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
         case "OctantVoxel":
             password = await HandleOctantVoxel(ns, server, details);
             break;
+        case "RateMyPix.Auth":
+            password = await HandleRateMyPix(ns, server, details);
+            break;
         default:
             var msg = await ns.dnet.heartbleed(server);
             ns.tprintRaw(`Crack needed for ${server} (model ${details.modelId})`);
@@ -175,94 +175,138 @@ export async function ModelHandler(ns: NS, server: string, details: DarknetServe
     return false;
 }
 
-export function RegisterDnetServer(ns: NS, server: string, password: string): void {
-    var servers: Map<string, string> | string = ns.readPort(DNET_SERVER_PORT);
-    if (typeof(servers) === "string") servers = new Map<string, string>();
-    servers.set(server, password);
-    ns.writePort(DNET_SERVER_PORT, servers);
-}
-
-export function UnregisterDnetServer(ns: NS, server: string): void {
-    var servers: Map<string, string> | string = ns.readPort(DNET_SERVER_PORT);
-    if (typeof(servers) === "string") servers = new Map<string, string>();
-    servers.delete(server);
-    ns.writePort(DNET_SERVER_PORT, servers);
-}
-
-export function GetDnetPassword(ns: NS, server: string): string | undefined {
-    const servers: Map<string, string> | string = ns.peek(DNET_SERVER_PORT);
-    if (typeof(servers) !== "string") return servers.get(server);
+export async function HandleAccountManager(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    for (var i = 0; i <= 10; i++) {
+        const auth = await ns.dnet.authenticate(server, i.toString());
+        if (auth.success) return i.toString();
+    }
     return undefined;
 }
 
-export function AddVisitedNode(ns: NS, server: string) {
-    var visited: Set<string> | string = ns.readPort(DNET_SWEEP_PORT);
-    ns.clearPort(DNET_SWEEP_PORT);
-    if (typeof(visited) === "string") visited = new Set<string>();
-    visited.add(server);
-    ns.writePort(DNET_SWEEP_PORT, visited);
+export async function HandleOctantVoxel(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    if (details.data.length === 0) return undefined;
+    const base = parseInt(details.data[0]);
+    const number = details.data[1].toString();
+    var result = 0;
+    for (var i = number.length - 1; i >= 0; i--) {
+        result += base ^ parseInt(number[i]);
+    }
+    const password = result.toString();
+    const auth = await ns.dnet.authenticate(server, password);
+    if (auth.success) return password;
+    return undefined;
 }
 
-export function WasVisited(ns: NS, server: string): boolean {
-    var visited: Set<string> | string = ns.peek(DNET_SWEEP_PORT);
-    if (typeof(visited) === "string") return false;
-    return visited.has(server);
-}
-
-export async function Propagate(ns: NS, overwrite: boolean): Promise<void> {
-    const servers = ns.dnet.probe();
-    for (const server of servers) {
-        const details = ns.dnet.getServerDetails(server);
-        if (!details.isOnline || WasVisited(ns, server)) continue;
-        if (await ModelHandler(ns, server, details)) {
-            if (overwrite) {
-                ns.scp("scripts/dnet/dnet.js", server);
-                ns.scp("scripts/dnet/phishing.js", server);
-                ns.scp("scripts/config.js", server);
-            }
-            if (overwrite) {
-                ns.exec("scripts/dnet/dnet.js", server, { preventDuplicates: true }, "o");
-            } else {
-                ns.exec("scripts/dnet/dnet.js", server, { preventDuplicates: true });
-            }
+export async function HandleNIL(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    var numbers = new Array<number>();
+    for (var i = 0; i <= 9; i++) {
+        const total = numbers.join("") + i.toString();
+        ns.tprintRaw(`trying ${total}`);
+        const auth = await ns.dnet.authenticate(server, total);
+        if (auth.success) return total;
+        const feedback: DarknetResult = await ns.dnet.heartbleed(server);
+        ns.tprintRaw(`feedback: ${feedback.message}`);
+        if (!feedback.message.includes("yesn't")) {
+            numbers.push(i);
+            i = 0;
         }
     }
-    return;
+    return undefined;
 }
 
-export async function main(ns: NS) {
-    while (true) {
-        const overwrite = ns.args[0] === "o";
-        const localhost = ns.getHostname();
-        if (localhost === "home") {
-            ns.clearPort(DNET_SWEEP_PORT);
-            const sweep = new Set<string>();
-            sweep.add("home");
-            ns.writePort(DNET_SWEEP_PORT, sweep);
-        }
-        if (!WasVisited(ns, localhost)) {
-            for (const file of ns.ls(localhost)) {
-                if (!file.includes(".js") && !file.includes(".cache")) {
-                    ns.scp(file, "home", localhost);
-                }
-            }
-        }
-        for (const cache of ns.ls(localhost, ".cache")) {
-            ns.dnet.openCache(cache);
-        }
-        AddVisitedNode(ns, localhost);
-        if (localhost !== "home") {
-            const threads = Math.floor((ns.getServerMaxRam(localhost) - 8) / ns.getScriptRam("scripts/dnet/phishing.js"));
-            if (threads < Number.POSITIVE_INFINITY) {
-                ns.exec("scripts/dnet/phishing.js", localhost, { threads: threads, preventDuplicates: true })
-            }
-        }
-        await Propagate(ns, overwrite);
-        if (localhost === "home") {
-            await ns.dnet.nextMutation();
-            continue;
-        }
-        return;
+export async function HandleFactorios(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    let auth;
+    var upper = "";
+    var lower = "1";
+    for (var i = 0; i < details.passwordLength; i++) {
+        upper += "9";
+        if (i > 0) lower += "0";
     }
+    for (var j = Number(lower); j <= Number(upper); j++) {
+        auth = await ns.dnet.authenticate(server, String(j));
+        if (auth.success) {
+            ns.tprintRaw(`FactoriOS successful! ${details.passwordLength} - ${j}`);
+            return String(j);
+        }
+    }
+    return undefined;
 }
 
+export async function HandleLaika(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    let password, auth;
+    if (details.passwordLength === 3) password = "max";
+    if (details.passwordLength === 5) password = "rover";
+    if (password !== undefined) {
+        auth = await ns.dnet.authenticate(server, password);
+        if (auth.success) return password;
+    }
+    for (const pw of ["fido", "spot"]) {
+        auth = await ns.dnet.authenticate(server, pw);
+        if (auth.success) return pw;
+    }
+    return undefined;
+}
+export async function HandleDeskMemo(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    const re = new RegExp(/(\d{1,3})/);
+    const match = re.exec(details.passwordHint);
+    if (match !== null) {
+        const password = match[0];
+        const auth = await ns.dnet.authenticate(server, password);
+        if (auth.success) return password;
+    }
+    return undefined;
+}
+
+export async function HandleFreshInstall(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    let password;
+    if (details.passwordLength === 4 && details.passwordFormat === "alphabetic") password = "root";
+    if (details.passwordLength === 4 && details.passwordFormat === "numeric") password = "0000";
+    if (details.passwordLength === 5 && details.passwordFormat === "alphabetic") password = "admin";
+    if (details.passwordLength === 8) password = "password";
+    if (password !== undefined) {
+        var auth = await ns.dnet.authenticate(server, password);
+        if (auth.success) return password;
+    } else {
+        for (const pw of ["12345", "00000", "1234"]) {
+            auth = await ns.dnet.authenticate(server, pw);
+            if (auth.success) return pw;
+        }
+    }
+    ns.tprintRaw(`Unknown FreshInstall password on ${server}: ${details.passwordHint} (${details.passwordLength})`);
+    return undefined;
+}
+
+export async function HandleZeroLogon(ns: NS, server: string): Promise<string | undefined> {
+    const auth = await ns.dnet.authenticate(server, "");
+    if (auth.success) return "";
+    return undefined;
+}
+
+export async function HandleOpenWebAccessPoint(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    var auth = await ns.dnet.authenticate(server, "bleed");
+    ns.tprint(`OpenWeb: ${auth.data}`);
+    return undefined;
+}
+
+export async function HandleCloudBlare(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    const re = /\d/g;
+    const match = details.data.matchAll(re);
+    if (match !== null) {
+        var password = "";
+        for (const char of match) password += char;
+        const auth = await ns.dnet.authenticate(server, password);
+        if (auth.success) return password;
+    }
+    return undefined;
+}
+
+export async function HandleRateMyPix(ns: NS, server: string, details: DarknetServerDetails): Promise<string | undefined> {
+    const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    var result = 0;
+    for (var char of "pepper") {
+        result += alpha.indexOf(char) + 1;
+    }
+    const auth = await ns.dnet.authenticate(server, result.toString());
+    if (auth.success) return result.toString();
+    return undefined;
+}
