@@ -125,7 +125,7 @@ export function RefreshCache(ns: NS): void {
     for (const server of servers) {
         const entry = new CacheEntry(ns, ns.getServer(server));
         if (!entry.isAgent && !entry.isVictim) continue;
-        PutBundle(ns, entry);
+        if (entry.isAgent) PutBundle(ns, entry);
         entries.push(entry);
     }
     if (!ns.tryWritePort(CACHE_PORT, entries)) {
