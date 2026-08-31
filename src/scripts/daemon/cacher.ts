@@ -1,6 +1,7 @@
 import { NS, Server } from "@ns";
 import { GetAllServerNames } from "../lib/server";
 import { CACHE_PORT, TARGET_PORT } from "../config";
+import { ValidateRegistryData } from "../lib/ports";
 
 /**
  * Preparation state of a victim server, from least to most ready to be batched.
@@ -141,11 +142,9 @@ export function RefreshCache(ns: NS): void {
  * @returns Set of hostnames currently registered as targets.
  */
 export function GetTargets(ns: NS): Set<string> {
-    const db = ns.peek(TARGET_PORT) as Set<string> | string;
-    if (typeof db === "string") {
-        return new Set<string>();
-    }
-    return db;
+    ValidateRegistryData<Set<string>>(ns, TARGET_PORT, Set<string>);
+    const registry = ns.peek(TARGET_PORT) as Set<string>;
+    return registry;
 }
 
 /**
