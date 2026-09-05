@@ -1,5 +1,6 @@
 import {NS} from "@ns";
 
-export function main(ns: NS) {
-    ns.dnet.setStasisLink(true);
+export async function main(ns: NS) {
+    ns.tprintRaw(`setting stasis link on ${ns.getHostname()}`);
+    await ns.dnet.setStasisLink(true);
 }
