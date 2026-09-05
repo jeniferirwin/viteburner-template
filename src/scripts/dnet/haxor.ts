@@ -50,7 +50,6 @@ export class DnetCracker {
 
     async SudoAuthenticate(ns: NS, password: string): Promise<DarknetResult & { data?: any }> {
         let result;
-        ns.tprintRaw(`Agent ${this.agent} trying to crack model ${this.model} on victim ${this.victim}...`);
         do { result = await ns.dnet.authenticate(this.victim, password); }
         while (result.code === this.enums.RequestTimeOut);
         this.latestAuthenticate = result;
@@ -141,18 +140,14 @@ export class DnetCracker {
         if (!match) return false;
         let num: number = (parseInt(match[2]) - parseInt(match[1])) / 2 + parseInt(match[1]);
         while (!this.ShouldGiveUp(auth)) {
-            ns.tprintRaw(`beginning of loop: ${num}`);
             auth = await this.SudoAuthenticate(ns, num.toString());
             bleed = await this.SudoHeartbleed(ns);
             if (auth.success) return true;
             if (bleed && bleed.logs.join().includes("Higher")) {
-                ns.tprintRaw("has higher");
                 num = num + 1;
             } else if (bleed && bleed.logs.join().includes("Lower")) {
-                ns.tprintRaw("has lower");
                 num = num - 1;
             }
-            ns.tprintRaw(`end of loop: ${num}`);
         }
         return auth.success;
     }
@@ -162,8 +157,6 @@ export class DnetCracker {
         do {
             auth = await this.SudoAuthenticate(ns, "dummypassword");
             bleed = await this.SudoHeartbleed(ns);
-            ns.tprintRaw(`${this.victim} ${this.model} auth: (${auth.message}) ${auth.data}`);
-            ns.tprintRaw(`${this.victim} ${this.model} bleed: (${bleed.message}) ${bleed.logs[0]}`);
             await ns.dnet.nextMutation();
         } while (bleed !== undefined && !this.ShouldGiveUp(auth));
         return true;
@@ -315,10 +308,9 @@ export class DnetCracker {
         var auth = await this.SudoAuthenticate(ns, "");
         while (!this.ShouldGiveUp(auth)) {
             const bleed = await this.SudoHeartbleed(ns);
+            ns.tprintRaw(bleed.logs);
             if (bleed === undefined) return false;
-            const data: HeartbleedLogLine = JSON.parse(bleed.logs[0]);
-            if (data.data !== undefined) {
-                ns.tprintRaw(`got openweb data: ${data.data}`);
+            if (bleed !== undefined) {
                 var match = re.exec(data.data);
                 if (match !== null && match.groups !== null && match.groups !== undefined) {
                     ns.tprint(`match found: ${match.groups}`);
@@ -356,11 +348,16 @@ export class DnetCracker {
         const details = ns.dnet.getServerDetails(this.victim);
         const buffer = new Array<number>(details.passwordLength);
         let auth = await this.SudoAuthenticate(ns, buffer.join(""));
-        if (!auth.data) return false;
+        if (auth.data === undefined) {
+            ns.tprintRaw("no auth data");
+            return false;
+        }
         const re = /"passwordExpected":"([^"]*)"/;
         const match = re.exec(auth.data);
+        if (!match) ns.tprintRaw("bruh");
         if (match) {
-            let auth = await this.SudoAuthenticate(ns, match[1]);
+            ns.tprintRaw(`trying ${match[1]}`);
+            auth = await this.SudoAuthenticate(ns, match[1]);
             if (auth.code === this.enums.Success) {
                 ns.tprintRaw("got it boiii");
                 return true;
@@ -385,6 +382,12 @@ export class DnetCracker {
 
     PutBundle(ns: NS): void {
         ns.scp(ns.ls(ns.getHostname(), "scripts/"), this.victim, ns.getHostname());
+        ns.scp(ns.ls(ns.getHostname(), ".lit"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".txt"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".js"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".ts"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".json"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".css"), "home", this.victim);
         if (!ns.scriptRunning(SCRIPTS.haxor, this.victim)) {
             const pid = ns.exec(SCRIPTS.free, this.victim);
         }
