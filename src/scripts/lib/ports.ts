@@ -1,13 +1,12 @@
 import {NS} from "@ns";
 
-export function ValidateRegistryData<T>(ns: NS, port: number, type: { new(): T } ): boolean {
+export function ValidateRegistryData<T>(ns: NS, port: number, type: { new(): T } ): T {
     const data: T | string = ns.peek(port);
-    if (typeof(data) !== "string") return true;
+    if (typeof(data) !== "string") return data;
     const valid = new type();
-    ns.clearPort(port);
     if (!ns.tryWritePort(port, valid)) {
         ns.tprintRaw(`[ERROR] Could not write to ${port}!`);
-        return false;
+        return new type();
     }
-    return true;
+    return valid as T;
 }
