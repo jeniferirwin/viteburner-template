@@ -9,7 +9,7 @@ export type HeartbleedLogLine = {
     passwordAttempted: string,
 }
 
-export class Haxor {
+export class DnetCracker {
     public latestHeartbleed?: DarknetResult & { logs: string[] };
     public latestAuthenticate?: DarknetResult & { data?: any };
     public modelMap: Map<string, Function> = new Map<string, Function>([
@@ -41,15 +41,16 @@ export class Haxor {
         public passwordFormat: string,
         public enums: DarknetResponseCodeType) {}
 
-    static async Create(ns: NS, victim: string): Promise<Haxor | undefined> {
+    static Create(ns: NS, victim: string): DnetCracker | undefined {
         const details = ns.dnet.getServerDetails(victim);
         if (!details.isOnline) return undefined;
-        if (ns.scriptRunning("haxor.js", victim)) return undefined;
-        return new Haxor(ns.getHostname(), victim, details.modelId, details.passwordHint, details.passwordLength, details.passwordFormat, ns.enums.DarknetResponseCode);
+        if (ns.scriptRunning(SCRIPTS.haxor, victim) || ns.scriptRunning(SCRIPTS.free, victim)) return undefined;
+        return new DnetCracker(ns.getHostname(), victim, details.modelId, details.passwordHint, details.passwordLength, details.passwordFormat, ns.enums.DarknetResponseCode);
     }
 
     async SudoAuthenticate(ns: NS, password: string): Promise<DarknetResult & { data?: any }> {
         let result;
+        ns.tprintRaw(`Agent ${this.agent} trying to crack model ${this.model} on victim ${this.victim}...`);
         do { result = await ns.dnet.authenticate(this.victim, password); }
         while (result.code === this.enums.RequestTimeOut);
         this.latestAuthenticate = result;
@@ -67,18 +68,31 @@ export class Haxor {
         return result;
     }
 
+    ShouldGiveUp(result: DarknetResult): boolean {
+        if (result.code === this.enums.AuthFailure ||
+            result.code === this.enums.RequestTimeOut ||
+            result.code === this.enums.Success) return false;
+        return true;
+    }
+
     SetAuthLock(ns: NS): boolean {
-        if (Haxor.GetAuthLock(ns, this.victim) > 0) return false;
+        if (!this.CanAuth(ns)) return false;
         var locks: Map<string, number> = ns.readPort(AUTH_LOCK_PORT);
         locks.set(this.victim, ns.pid);
         return ns.tryWritePort(AUTH_LOCK_PORT, locks);
     }
 
     RemoveAuthLock(ns: NS): boolean {
-        if (Haxor.GetAuthLock(ns, this.victim) !== ns.pid) return false;
+        if (!this.CanAuth(ns)) return false;
         var locks: Map<string, string> = ns.readPort(AUTH_LOCK_PORT);
         locks.delete(this.victim);
         return ns.tryWritePort(AUTH_LOCK_PORT, locks);
+    }
+
+    CanAuth(ns: NS): boolean {
+        const lock = DnetCracker.GetAuthLock(ns, this.victim);
+        if (lock > 0 && lock !== ns.pid) return false;
+        return true;
     }
 
     static GetAuthLock(ns: NS, victim: string): number {
@@ -89,7 +103,6 @@ export class Haxor {
     RegisterPassword(ns: NS, password: string): boolean {
         var registry = ValidateRegistryData<Map<string, string>>(ns, DNET_SERVER_PORT, Map<string, string>);
         ns.clearPort(DNET_SERVER_PORT);
-        ns.tprintRaw(`registering ${this.victim} (${this.model}) with password ${password}`);
         registry.set(this.victim, password);
         return ns.tryWritePort(DNET_SERVER_PORT, registry);
     }
@@ -103,25 +116,17 @@ export class Haxor {
     async Login(ns: NS): Promise<boolean>  {
         const registry = ValidateRegistryData<Map<string, string>>(ns, DNET_SERVER_PORT, Map<string, string>);
         if (!registry.has(this.victim)) return false;
-        let auth;
-        do {
-            auth = await this.SudoAuthenticate(ns, registry.get(this.victim)!);
-        } while (auth && auth.code === this.enums.RequestTimeOut)
+        let auth = ns.dnet.connectToSession(this.victim, registry.get(this.victim) ?? "");
+        if (auth.code !== this.enums.Success) this.UnregisterPassword(ns);
         return auth.success;
     }
 
     async StartCrack(ns: NS): Promise<boolean> {
         if (!ns.dnet.getServerDetails(this.victim).isOnline) return false;
-        const lock = Haxor.GetAuthLock(ns, this.victim);
-        if (lock > 0 && lock !== ns.pid) return false;
-        this.SetAuthLock(ns);
         for (var [key, value] of this.modelMap) {
             if (this.model.includes(key)) {
-                const auth = await value.call(this, ns);
-                if (auth) {
-                }
-                this.RemoveAuthLock(ns);
-                return true;
+                const auth: DarknetResult & { data?: any } = await value.call(this, ns);
+                if (auth.code === this.enums.Success) { return true; }
             }
         }
         return false;
@@ -130,7 +135,7 @@ export class Haxor {
     async CrackAccountManager(ns: NS): Promise<boolean> {
         let auth = await this.SudoAuthenticate(ns, "init");
         let bleed = await this.SudoHeartbleed(ns);
-        if (!auth || !bleed) return false;
+        if (this.ShouldGiveUp(auth)) return false;
         const re = /between (\d+) and (\d+)/;
         const match = re.exec(bleed.logs.join());
         if (!match) return false;
@@ -267,16 +272,11 @@ export class Haxor {
         return false;
     }
 
-    ShouldGiveUp(result: DarknetResult) {
-        if (result.code in [this.enums.AuthFailure, this.enums.RequestTimeOut, this.enums.Success]) return false;
-        return true;
-    }
-
     async CrackNil(ns: NS): Promise<boolean> {
         const details = ns.dnet.getServerDetails(this.victim);
         const numbers = [];
         for (var i = 0; i < details.passwordLength; i++) numbers.push(0);
-        var auth = await this.SudoAuthenticate(ns, numbers.join(""));
+        let auth = await this.SudoAuthenticate(ns, numbers.join(""));
         while (!this.ShouldGiveUp(auth)) {
             const bleed = await this.SudoHeartbleed(ns);
             if (bleed.logs[0] !== undefined) {
@@ -291,20 +291,19 @@ export class Haxor {
                     }
                 }
                 auth = await this.SudoAuthenticate(ns, numbers.join(""));
+                if (auth.code === this.enums.Success) return true;
             }
         }
-        if (auth.code === this.enums.Success) return true;
         return false;
     }
 
     async CrackOctantVoxel(ns: NS): Promise<boolean> {
         const details = ns.dnet.getServerDetails(this.victim);
-        let auth;
         if (details.data.length === 0) return false;
         const info = details.data.split(",");
         const base = parseInt(info[0]);
         const numeric = parseInt(info[1], base);
-        auth = await this.SudoAuthenticate(ns, numeric.toString());
+        let auth = await this.SudoAuthenticate(ns, numeric.toString());
         if (auth.success) return true;
         return false;
     }
@@ -312,7 +311,7 @@ export class Haxor {
     async CrackOpenWebAccessPoint(ns: NS): Promise<boolean> {
         const details = ns.dnet.getServerDetails(this.victim);
         const chars = details.passwordLength; 
-        const re = new RegExp(`:(\\d{${chars},${chars}}) `);
+        const re = /:(\\d{${chars},${chars})/;
         var auth = await this.SudoAuthenticate(ns, "");
         while (!this.ShouldGiveUp(auth)) {
             const bleed = await this.SudoHeartbleed(ns);
@@ -337,7 +336,7 @@ export class Haxor {
         var scrambled = Array.from(match[0]);
         const tried = new Set<string>();
         var auth = await this.SudoAuthenticate(ns, scrambled.join(""));
-        while (!this.ShouldGiveUp(auth)) {
+        while (this.ShouldGiveUp(auth) === false) {
             for (let i = scrambled.length - 1; i >= 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [scrambled[i], scrambled[j]] = [scrambled[j], scrambled[i]];
@@ -348,11 +347,25 @@ export class Haxor {
             }
             tried.add(scrambled.join(""));
             auth = await this.SudoAuthenticate(ns, scrambled.join(""));
+            if (auth.code === this.enums.Success) return true;
         }
-        return true;
+        return false;
     }
 
     async CrackPr0verFl0(ns: NS): Promise<boolean> {
+        const details = ns.dnet.getServerDetails(this.victim);
+        const buffer = new Array<number>(details.passwordLength);
+        let auth = await this.SudoAuthenticate(ns, buffer.join(""));
+        if (!auth.data) return false;
+        const re = /"passwordExpected":"([^"]*)"/;
+        const match = re.exec(auth.data);
+        if (match) {
+            let auth = await this.SudoAuthenticate(ns, match[1]);
+            if (auth.code === this.enums.Success) {
+                ns.tprintRaw("got it boiii");
+                return true;
+            }
+        }
         return false;
     }
 
@@ -364,6 +377,18 @@ export class Haxor {
         const auth = await this.SudoAuthenticate(ns, "");
         return auth.success;
     }
+
+    TargetIsAgent(ns: NS): boolean {
+        if (ns.scriptRunning(SCRIPTS.haxor, this.victim) || ns.scriptRunning(SCRIPTS.free)) return true;
+        return false;
+    }
+
+    PutBundle(ns: NS): void {
+        ns.scp(ns.ls(ns.getHostname(), "scripts/"), this.victim, ns.getHostname());
+        if (!ns.scriptRunning(SCRIPTS.haxor, this.victim)) {
+            const pid = ns.exec(SCRIPTS.free, this.victim);
+        }
+    }
 }
 
 export async function main(ns: NS) {
@@ -372,25 +397,17 @@ export async function main(ns: NS) {
         ns.clearPort(DNET_SERVER_PORT);
     }
     do {
+        const caches = ns.ls(ns.getHostname(), ".cache");
+        for (var cache of caches) {
+            ns.dnet.openCache(cache);
+        }
         const servers = ns.dnet.probe();
         for (var server of servers) {
-            if (server === "th3_l4byr1nth") {
-                ns.exec(SCRIPTS.stasis, ns.getHostname());
-            }
-            const caches = ns.ls(ns.getHostname(), ".cache");
-            for (var cache of caches) {
-                ns.dnet.openCache(cache);
-            }
-            const lock = Haxor.GetAuthLock(ns, server);
-            if ((lock > 0 && lock !== ns.pid) || ns.scriptRunning(SCRIPTS.haxor, server) || ns.scriptRunning(SCRIPTS.free, server)) continue;
-            const haxor = await Haxor.Create(ns, server);
-            if (haxor === undefined) continue;
-            if (await haxor.Login(ns) || await haxor.StartCrack(ns)) {
-                ns.scp(ns.ls(ns.getHostname(), "scripts/"), haxor.victim, ns.getHostname());
-                if (!ns.exec(SCRIPTS.haxor, haxor.victim)) {
-                    ns.exec(SCRIPTS.free, haxor.victim);
-                }
-            }
+            const cracker = DnetCracker.Create(ns, server);
+            if (cracker === undefined) continue;
+            if (cracker.TargetIsAgent(ns) || !cracker.SetAuthLock(ns)) continue;
+            if (await cracker.Login(ns) || await cracker.StartCrack(ns)) cracker.PutBundle(ns);
+            cracker.RemoveAuthLock(ns);
         }
         await ns.dnet.nextMutation();
     } while (true);
