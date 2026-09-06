@@ -308,10 +308,11 @@ export class DnetCracker {
         var auth = await this.SudoAuthenticate(ns, "");
         while (!this.ShouldGiveUp(auth)) {
             const bleed = await this.SudoHeartbleed(ns);
-            ns.tprintRaw(bleed.logs);
+            ns.tprintRaw(` tljalsdjf ${bleed.logs}`);
+			await ns.sleep(5000);
             if (bleed === undefined) return false;
             if (bleed !== undefined) {
-                var match = re.exec(data.data);
+                var match = re.exec(bleed.logs[0]);
                 if (match !== null && match.groups !== null && match.groups !== undefined) {
                     ns.tprint(`match found: ${match.groups}`);
                 }
