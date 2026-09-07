@@ -43,7 +43,7 @@ export class DnetCracker {
 
     static Create(ns: NS, victim: string): DnetCracker | undefined {
         const details = ns.dnet.getServerDetails(victim);
-        if (!details.isOnline) return undefined;
+        if (!details.isOnline || victim === "home") return undefined;
         if (ns.scriptRunning(SCRIPTS.haxor, victim) || ns.scriptRunning(SCRIPTS.free, victim)) return undefined;
         return new DnetCracker(ns.getHostname(), victim, details.modelId, details.passwordHint, details.passwordLength, details.passwordFormat, ns.enums.DarknetResponseCode);
     }
@@ -131,6 +131,50 @@ export class DnetCracker {
         return false;
     }
 
+    async Placeholder(ns: NS): Promise<boolean> {
+        let auth, bleed;
+        do {
+            auth = await this.SudoAuthenticate(ns, "-");
+            bleed = await this.SudoHeartbleed(ns);
+            const lines = [];
+            lines.push(`${this.agent} vs. ${this.victim} (${this.model})`);
+            lines.push(`auth.code: ${auth.code}`);
+            lines.push(`auth.data: ${auth.data}`);
+            lines.push(`auth.message: ${auth.message}`);
+            lines.push(`auth.success: ${auth.success}`);
+            lines.push(`-------------------------------------`);
+            lines.push(`bleed.code: ${bleed.code}`);
+            lines.push(`bleed.data: ${bleed.logs}`);
+            lines.push(`bleed.message: ${bleed.message}`);
+            lines.push(`bleed.success: ${bleed.success}`);
+            lines.push(`=====================================`);
+            for (var i = 0; i < lines.length; i++) lines[i] = `[${ns.pid}]` + lines[i];
+            ns.print(lines);
+            await ns.dnet.nextMutation();
+        } while (bleed !== undefined && !this.ShouldGiveUp(auth));
+        return true;
+    }
+
+    async CrackZeroLogon(ns: NS): Promise<boolean> {
+        const auth = await this.SudoAuthenticate(ns, "");
+        return auth.success;
+    }
+
+    TargetIsAgent(ns: NS): boolean {
+        if (ns.scriptRunning(SCRIPTS.haxor, this.victim) || ns.scriptRunning(SCRIPTS.free, this.victim)) return true;
+        return false;
+    }
+
+    PutBundle(ns: NS): void {
+        ns.scp(ns.ls(ns.getHostname(), "scripts/"), this.victim, ns.getHostname());
+        ns.scp(ns.ls(ns.getHostname(), ".lit"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".txt"), "home", this.victim);
+        ns.scp(ns.ls(ns.getHostname(), ".css"), "home", this.victim);
+        if (!ns.scriptRunning(SCRIPTS.haxor, this.victim) && !ns.scriptRunning(SCRIPTS.free, this.victim)) {
+            const pid = ns.exec(SCRIPTS.free, this.victim);
+        }
+    }
+
     async CrackAccountManager(ns: NS): Promise<boolean> {
         let auth = await this.SudoAuthenticate(ns, "init");
         let bleed = await this.SudoHeartbleed(ns);
@@ -152,18 +196,53 @@ export class DnetCracker {
         return auth.success;
     }
 
-    async Placeholder(ns: NS): Promise<boolean> {
-        let auth, bleed;
-        do {
-            auth = await this.SudoAuthenticate(ns, "dummypassword");
-            bleed = await this.SudoHeartbleed(ns);
-            await ns.dnet.nextMutation();
-        } while (bleed !== undefined && !this.ShouldGiveUp(auth));
+
+    async CrackBellaCuore(ns: NS): Promise<boolean> {
+        return await this.Placeholder(ns);
+    }
+
+    async CrackKingOfTheHill(ns: NS): Promise<boolean> {
+        return await this.Placeholder(ns);
+    }
+
+    async CrackOpenWebAccessPoint(ns: NS): Promise<boolean> {
+        const details = ns.dnet.getServerDetails(this.victim);
+        const chars = details.passwordLength; 
+        const re = /:(\\d{${chars},${chars})/;
+        var auth = await this.SudoAuthenticate(ns, "");
+        while (!this.ShouldGiveUp(auth)) {
+            const bleed = await this.SudoHeartbleed(ns);
+            if (this.ShouldGiveUp(bleed)) return false;
+                var match = re.exec(bleed.logs[0]);
+                if (match && match.groups) {
+                    ns.print(`match found: ${match.groups}`);
+            }
+        }
         return true;
     }
 
-    async CrackBellaCuore(ns: NS): Promise<boolean> {
+    async CrackPr0verFl0(ns: NS): Promise<boolean> {
+        const details = ns.dnet.getServerDetails(this.victim);
+        const buffer = new Array<number>(details.passwordLength * 2).fill(0);
+        let auth = await this.SudoAuthenticate(ns, buffer.join(""));
+        let bleed = await this.SudoHeartbleed(ns);
+        const re = /\"passwordExpected\":\"([^\"]*)\"/;
+        const re2 = /\"passwordAttempted\":\"([^\"]*)\"/;
+        const match = re.exec(bleed.logs.join(""));
+        if (!match) return false;
+        if (match) {
+            const authAttempt = buffer.join("") + match[1];
+            auth = await this.SudoAuthenticate(ns, `${authAttempt}`);
+            bleed = await this.SudoHeartbleed(ns);
+            ns.tprintRaw(auth.data);
+            ns.tprintRaw(bleed.logs);
+            if (auth.code === this.enums.Success) return true;
+        }
         return false;
+    }
+
+    async CrackRateMyPix(ns: NS): Promise<boolean> {
+        return await this.Placeholder(ns);
     }
 
     async CrackCloudBlare(ns: NS): Promise<boolean> {
@@ -243,9 +322,6 @@ export class DnetCracker {
         return false;
     }
 
-    async CrackKingOfTheHill(ns: NS): Promise<boolean> {
-        return false;
-    }
 
     async CrackLabyrinth(ns: NS): Promise<boolean> {
         for (var num = 1111; num <= 9999; num++) {
@@ -301,25 +377,6 @@ export class DnetCracker {
         return false;
     }
 
-    async CrackOpenWebAccessPoint(ns: NS): Promise<boolean> {
-        const details = ns.dnet.getServerDetails(this.victim);
-        const chars = details.passwordLength; 
-        const re = /:(\\d{${chars},${chars})/;
-        var auth = await this.SudoAuthenticate(ns, "");
-        while (!this.ShouldGiveUp(auth)) {
-            const bleed = await this.SudoHeartbleed(ns);
-            ns.tprintRaw(` tljalsdjf ${bleed.logs}`);
-			await ns.sleep(5000);
-            if (bleed === undefined) return false;
-            if (bleed !== undefined) {
-                var match = re.exec(bleed.logs[0]);
-                if (match !== null && match.groups !== null && match.groups !== undefined) {
-                    ns.tprint(`match found: ${match.groups}`);
-                }
-            }
-        }
-        return true;
-    }
     
     async CrackPHP(ns: NS): Promise<boolean> {
         const details = ns.dnet.getServerDetails(this.victim);
@@ -345,54 +402,6 @@ export class DnetCracker {
         return false;
     }
 
-    async CrackPr0verFl0(ns: NS): Promise<boolean> {
-        const details = ns.dnet.getServerDetails(this.victim);
-        const buffer = new Array<number>(details.passwordLength);
-        let auth = await this.SudoAuthenticate(ns, buffer.join(""));
-        if (auth.data === undefined) {
-            ns.tprintRaw("no auth data");
-            return false;
-        }
-        const re = /"passwordExpected":"([^"]*)"/;
-        const match = re.exec(auth.data);
-        if (!match) ns.tprintRaw("bruh");
-        if (match) {
-            ns.tprintRaw(`trying ${match[1]}`);
-            auth = await this.SudoAuthenticate(ns, match[1]);
-            if (auth.code === this.enums.Success) {
-                ns.tprintRaw("got it boiii");
-                return true;
-            }
-        }
-        return false;
-    }
-
-    async CrackRateMyPix(ns: NS): Promise<boolean> {
-        return false;
-    }
-
-    async CrackZeroLogon(ns: NS): Promise<boolean> {
-        const auth = await this.SudoAuthenticate(ns, "");
-        return auth.success;
-    }
-
-    TargetIsAgent(ns: NS): boolean {
-        if (ns.scriptRunning(SCRIPTS.haxor, this.victim) || ns.scriptRunning(SCRIPTS.free)) return true;
-        return false;
-    }
-
-    PutBundle(ns: NS): void {
-        ns.scp(ns.ls(ns.getHostname(), "scripts/"), this.victim, ns.getHostname());
-        ns.scp(ns.ls(ns.getHostname(), ".lit"), "home", this.victim);
-        ns.scp(ns.ls(ns.getHostname(), ".txt"), "home", this.victim);
-        ns.scp(ns.ls(ns.getHostname(), ".js"), "home", this.victim);
-        ns.scp(ns.ls(ns.getHostname(), ".ts"), "home", this.victim);
-        ns.scp(ns.ls(ns.getHostname(), ".json"), "home", this.victim);
-        ns.scp(ns.ls(ns.getHostname(), ".css"), "home", this.victim);
-        if (!ns.scriptRunning(SCRIPTS.haxor, this.victim)) {
-            const pid = ns.exec(SCRIPTS.free, this.victim);
-        }
-    }
 }
 
 export async function main(ns: NS) {
