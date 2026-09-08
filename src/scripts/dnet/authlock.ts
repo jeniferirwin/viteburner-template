@@ -75,6 +75,7 @@ export function PeekAuthLocks(ns: NS): Array<AuthLock> {
     let locks = ns.peek(AUTH_LOCK_PORT);
     if (locks === "NULL PORT DATA") {
         locks = new Array<AuthLock>();    
+		ns.tryWritePort(AUTH_LOCK_PORT, locks);
     }
     return FilterActivePids(ns, locks);
 }
@@ -97,8 +98,9 @@ export function ReadAuthLocks(ns: NS): Array<AuthLock> {
     let locks = ns.readPort(AUTH_LOCK_PORT);
     if (locks === "NULL PORT DATA") {
         locks = new Array<number>();    
-    }
-    ns.clearPort(AUTH_LOCK_PORT);
+    } else {
+    	ns.clearPort(AUTH_LOCK_PORT);
+	}
     return FilterActivePids(ns, locks);
 }
 
