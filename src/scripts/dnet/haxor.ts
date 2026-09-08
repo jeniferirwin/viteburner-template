@@ -404,6 +404,24 @@ export class DnetCracker {
 
 }
 
+export function StasisCheck(ns: NS) {
+    if (ns.getHostname() === "home" || ns.getHostname() === "darkweb") return;
+    const servers = ns.dnet.getStasisLinkedServers();
+    const current = ns.dnet.getServerDetails();
+    if (ns.getServerMaxRam() < ns.getScriptRam(ns.getScriptName()) + ns.getScriptRam(SCRIPTS.stasis)) return;
+    if (servers.length === 0) {
+        ns.run(SCRIPTS.stasis, undefined, true);
+    }
+    for (var server of servers) {
+        const details = ns.dnet.getServerDetails(server);
+        if (current.depth > details.depth) {
+            ns.run(SCRIPTS.stasis, undefined, true);
+        } else {
+            ns.run(SCRIPTS.stasis, undefined, false);
+        }
+    }
+}
+
 export async function main(ns: NS) {
     if (ns.getHostname() === "home") {
         ns.clearPort(AUTH_LOCK_PORT);
